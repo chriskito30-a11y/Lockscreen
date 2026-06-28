@@ -112,7 +112,7 @@ export async function handleWallpaper(token: string | null): Promise<Response> {
       revelation: message,
       wiki: { title: 'Erreur', lang: 'fr' }
     });
-    return pngResponse(buffer, { status: 500 });
+    return pngResponse(buffer, { status: 200, headers: { 'x-magic-error': encodeURIComponent(message) } });
   }
 }
 
