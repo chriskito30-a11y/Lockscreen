@@ -24,7 +24,7 @@ public final class MagicStandaloneClient {
     private MagicStandaloneClient() {}
 
     private static String enc(String value) throws Exception {
-        return URLEncoder.encode(value, "UTF-8");
+        return URLEncoder.encode(value == null ? "" : value, "UTF-8");
     }
 
     private static HttpURLConnection open(String url) throws Exception {
@@ -33,7 +33,7 @@ public final class MagicStandaloneClient {
         connection.setReadTimeout(25000);
         connection.setRequestMethod("GET");
         connection.setInstanceFollowRedirects(true);
-        connection.setRequestProperty("User-Agent", "ModulysMagicLock/2.0 Android standalone");
+        connection.setRequestProperty("User-Agent", "ModulysMagicLock/2.3 Android standalone");
         return connection;
     }
 
@@ -218,7 +218,7 @@ public final class MagicStandaloneClient {
         return new MagicResult(value, sha(value), "", value);
     }
 
-    public static MagicResult findWikipediaImage(Context context, String query) throws Exception {
+    private static MagicResult findWikipediaImage(Context context, String query) throws Exception {
         String lang = MagicPrefs.lang(context);
         if (lang == null || lang.trim().isEmpty()) lang = "fr";
         lang = lang.toLowerCase(Locale.US).replaceAll("[^a-z-]", "");
@@ -250,14 +250,86 @@ public final class MagicStandaloneClient {
         return new MagicResult(query, sha(query), image, title.isEmpty() ? query : title);
     }
 
+    private static MagicResult findGoogleImage(Context context, String query) throws Exception {
+        String apiKey = MagicPrefs.googleApiKey(context);
+        String cx = MagicPrefs.googleCx(context);
+
+        if (apiKey == null || apiKey.trim().isEmpty() || cx == null || cx.trim().isEmpty()) {
+            throw new IllegalStateException("Google Images demande une clé API Google et un CX Programmable Search.");
+        }
+
+        String api = "https://www.googleapis.com/customsearch/v1"
+                + "?key=" + enc(apiKey.trim())
+                + "&cx=" + enc(cx.trim())
+                + "&q=" + enc(query)
+                + "&searchType=image"
+                + "&num=1"
+                + "&safe=off"
+                + "&imgSize=large";
+
+        String json = getText(api);
+        try {
+            JSONObject root = new JSONObject(json);
+            JSONArray items = root.optJSONArray("items");
+            if (items == null || items.length() == 0) return new MagicResult(query, sha(query), "", query);
+            JSONObject item = items.getJSONObject(0);
+            String title = item.optString("title", query);
+            String link = item.optString("link", "");
+            return new MagicResult(query, sha(query), link, title.isEmpty() ? query : title);
+        } catch (Exception e) {
+            String image = extractDirectKey(json, "link");
+            String title = extractDirectKey(json, "title");
+            return new MagicResult(query, sha(query), image, title.isEmpty() ? query : title);
+        }
+    }
+
+    private static Bitmap tryDownloadBitmap(String imageUrl) {
+        try {
+            if (imageUrl == null || imageUrl.trim().isEmpty()) return null;
+            if (imageUrl.toLowerCase(Locale.US).endsWith(".svg")) return null;
+            byte[] bytes = getBytes(imageUrl);
+            return BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
     public static MagicResult updateLockscreen(Context context) throws Exception {
         MagicResult value = fetchValue(context);
-        MagicResult wiki = findWikipediaImage(context, value.value);
-        if (wiki.imageUrl == null || wiki.imageUrl.isEmpty()) throw new IllegalStateException("Photo Wikipédia introuvable pour : " + value.value);
-        byte[] bytes = getBytes(wiki.imageUrl);
-        Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-        if (bitmap == null) throw new IllegalStateException("Image illisible");
-        WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, WallpaperManager.FLAG_LOCK);
-        return new MagicResult(value.value, value.hash, wiki.imageUrl, wiki.title);
+        String provider = MagicPrefs.imageProvider(context);
+        if (provider == null || provider.trim().isEmpty()) provider = "auto";
+        provider = provider.toLowerCase(Locale.US);
+
+        List<String> order = new ArrayList<>();
+        if ("google".equals(provider)) {
+            order.add("google");
+        } else if ("wikipedia".equals(provider)) {
+            order.add("wikipedia");
+        } else {
+            // Auto : Google si configuré, puis Wikipédia.
+            if (!MagicPrefs.googleApiKey(context).isEmpty() && !MagicPrefs.googleCx(context).isEmpty()) order.add("google");
+            order.add("wikipedia");
+        }
+
+        String lastError = "";
+        for (String current : order) {
+            try {
+                MagicResult imageResult = "google".equals(current)
+                        ? findGoogleImage(context, value.value)
+                        : findWikipediaImage(context, value.value);
+
+                Bitmap bitmap = tryDownloadBitmap(imageResult.imageUrl);
+                if (bitmap != null) {
+                    WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, WallpaperManager.FLAG_LOCK);
+                    return new MagicResult(value.value, value.hash, imageResult.imageUrl, imageResult.title);
+                }
+                lastError = "Image introuvable ou illisible via " + current;
+            } catch (Exception e) {
+                lastError = e.getMessage() == null ? current : e.getMessage();
+                if ("google".equals(provider)) throw e;
+            }
+        }
+
+        throw new IllegalStateException(lastError.isEmpty() ? "Aucune photo trouvée pour : " + value.value : lastError);
     }
 }

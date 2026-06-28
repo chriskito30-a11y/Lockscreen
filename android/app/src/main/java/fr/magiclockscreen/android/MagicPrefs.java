@@ -24,6 +24,18 @@ public final class MagicPrefs {
         return prefs(context).getString("lang", "fr");
     }
 
+    public static String imageProvider(Context context) {
+        return prefs(context).getString("imageProvider", "auto");
+    }
+
+    public static String googleApiKey(Context context) {
+        return prefs(context).getString("googleApiKey", "");
+    }
+
+    public static String googleCx(Context context) {
+        return prefs(context).getString("googleCx", "");
+    }
+
     public static int intervalSeconds(Context context) {
         return prefs(context).getInt("interval", 3);
     }
@@ -36,17 +48,30 @@ public final class MagicPrefs {
         return prefs(context).getString("lastHash", "");
     }
 
-    public static void saveConfig(Context context, String sourceUrl, String jsonPath, String lang, int interval, int duration) {
+    public static void saveConfig(
+            Context context,
+            String sourceUrl,
+            String jsonPath,
+            String lang,
+            String imageProvider,
+            String googleApiKey,
+            String googleCx,
+            int interval,
+            int duration
+    ) {
         prefs(context).edit()
-                .putString("sourceUrl", sourceUrl.trim())
-                .putString("jsonPath", jsonPath.trim().isEmpty() ? "value" : jsonPath.trim())
-                .putString("lang", lang.trim().isEmpty() ? "fr" : lang.trim())
+                .putString("sourceUrl", sourceUrl == null ? "" : sourceUrl.trim())
+                .putString("jsonPath", jsonPath == null || jsonPath.trim().isEmpty() ? "value" : jsonPath.trim())
+                .putString("lang", lang == null || lang.trim().isEmpty() ? "fr" : lang.trim())
+                .putString("imageProvider", imageProvider == null || imageProvider.trim().isEmpty() ? "auto" : imageProvider.trim())
+                .putString("googleApiKey", googleApiKey == null ? "" : googleApiKey.trim())
+                .putString("googleCx", googleCx == null ? "" : googleCx.trim())
                 .putInt("interval", Math.max(1, Math.min(60, interval)))
                 .putInt("duration", Math.max(1, Math.min(240, duration)))
                 .apply();
     }
 
     public static void setLastHash(Context context, String hash) {
-        prefs(context).edit().putString("lastHash", hash).apply();
+        prefs(context).edit().putString("lastHash", hash == null ? "" : hash).apply();
     }
 }

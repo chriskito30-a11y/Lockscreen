@@ -2,10 +2,13 @@ package fr.magiclockscreen.android;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -26,21 +29,30 @@ public class MainActivity extends Activity {
     private EditText sourceEdit;
     private EditText pathEdit;
     private EditText langEdit;
+    private EditText googleKeyEdit;
+    private EditText googleCxEdit;
     private EditText intervalEdit;
     private EditText durationEdit;
     private TextView statusText;
     private TextView scanText;
     private Spinner scanSpinner;
+    private Spinner imageProviderSpinner;
     private final List<ScanCandidate> candidates = new ArrayList<>();
 
     private final int bgTop = Color.rgb(9, 14, 35);
     private final int bgBottom = Color.rgb(28, 17, 65);
     private final int card = Color.rgb(15, 23, 42);
     private final int card2 = Color.rgb(17, 24, 50);
-    private final int text = Color.WHITE;
     private final int muted = Color.rgb(203, 213, 225);
     private final int purple = Color.rgb(139, 92, 246);
     private final int cyan = Color.rgb(34, 211, 238);
+
+    private final String[] providerLabels = new String[]{
+            "Auto : Google puis Wikipédia",
+            "Wikipédia uniquement",
+            "Google Images"
+    };
+    private final String[] providerValues = new String[]{"auto", "wikipedia", "google"};
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,13 +71,13 @@ public class MainActivity extends Activity {
 
     private void buildUi() {
         ScrollView scroll = new ScrollView(this);
+        scroll.setClipToPadding(false);
         GradientDrawable rootBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{bgTop, bgBottom});
         scroll.setBackground(rootBg);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(28), dp(20), dp(120));
-        scroll.setClipToPadding(false);
 
         TextView logo = new TextView(this);
         logo.setText("✦");
@@ -90,7 +102,7 @@ public class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("APK autonome : scanne ton JSON Inject, choisis la valeur à écouter, puis affiche automatiquement la photo Wikipédia sur le lockscreen.");
+        subtitle.setText("APK autonome : scanne ton JSON Inject, choisis la valeur à écouter, puis affiche automatiquement une image sur le lockscreen.");
         subtitle.setTextSize(15f);
         subtitle.setTextColor(muted);
         subtitle.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -122,6 +134,31 @@ public class MainActivity extends Activity {
         configCard.addView(label("Clé JSON à écouter"));
         pathEdit = input("value ou selection", MagicPrefs.jsonPath(this));
         configCard.addView(pathEdit);
+
+        configCard.addView(label("Source image"));
+        imageProviderSpinner = new Spinner(this);
+        imageProviderSpinner.setPadding(dp(10), dp(8), dp(10), dp(8));
+        imageProviderSpinner.setBackground(inputBg());
+        ArrayAdapter<String> providerAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, providerLabels);
+        providerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        imageProviderSpinner.setAdapter(providerAdapter);
+        imageProviderSpinner.setSelection(providerIndex(MagicPrefs.imageProvider(this)));
+        configCard.addView(imageProviderSpinner);
+
+        TextView googleInfo = new TextView(this);
+        googleInfo.setText("Google Images nécessite une clé API Google Custom Search et un CX. Sans ces champs, le mode Auto utilise Wikipédia.");
+        googleInfo.setTextSize(13f);
+        googleInfo.setTextColor(Color.rgb(186, 230, 253));
+        googleInfo.setPadding(0, dp(10), 0, 0);
+        configCard.addView(googleInfo);
+
+        configCard.addView(label("Google API Key (optionnel)"));
+        googleKeyEdit = input("AIza...", MagicPrefs.googleApiKey(this));
+        configCard.addView(googleKeyEdit);
+
+        configCard.addView(label("Google Search Engine ID / CX (optionnel)"));
+        googleCxEdit = input("ex : 123abc456def", MagicPrefs.googleCx(this));
+        configCard.addView(googleCxEdit);
 
         configCard.addView(label("Langue Wikipédia"));
         langEdit = input("fr", MagicPrefs.lang(this));
@@ -164,10 +201,10 @@ public class MainActivity extends Activity {
         footer.setTextSize(13f);
         footer.setTextColor(Color.rgb(148, 163, 184));
         footer.setGravity(Gravity.CENTER_HORIZONTAL);
-        footer.setPadding(0, dp(22), 0, 0);
+        footer.setPadding(0, dp(26), 0, 0);
         footer.setClickable(true);
-        footer.setPaintFlags(footer.getPaintFlags() | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
-        footer.setOnClickListener(v -> startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://modulys.top"))));
+        footer.setPaintFlags(footer.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
+        footer.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://modulys.top"))));
         root.addView(footer);
 
         scanSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
@@ -337,10 +374,34 @@ public class MainActivity extends Activity {
         return button;
     }
 
+    private int providerIndex(String value) {
+        if (value == null) return 0;
+        for (int i = 0; i < providerValues.length; i++) {
+            if (providerValues[i].equalsIgnoreCase(value.trim())) return i;
+        }
+        return 0;
+    }
+
+    private String selectedProvider() {
+        int idx = imageProviderSpinner == null ? 0 : imageProviderSpinner.getSelectedItemPosition();
+        if (idx < 0 || idx >= providerValues.length) return "auto";
+        return providerValues[idx];
+    }
+
     private void saveConfig() {
         int interval = parseInt(intervalEdit.getText().toString(), 3);
         int duration = parseInt(durationEdit.getText().toString(), 10);
-        MagicPrefs.saveConfig(this, sourceEdit.getText().toString(), pathEdit.getText().toString(), langEdit.getText().toString(), interval, duration);
+        MagicPrefs.saveConfig(
+                this,
+                sourceEdit.getText().toString(),
+                pathEdit.getText().toString(),
+                langEdit.getText().toString(),
+                selectedProvider(),
+                googleKeyEdit.getText().toString(),
+                googleCxEdit.getText().toString(),
+                interval,
+                duration
+        );
     }
 
     private int parseInt(String value, int fallback) {
