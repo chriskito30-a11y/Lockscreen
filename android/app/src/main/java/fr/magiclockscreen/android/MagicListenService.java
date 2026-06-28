@@ -12,9 +12,8 @@ import android.os.IBinder;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MagicListenService extends Service {
-    private static final int NOTIFICATION_ID = 3026;
+    private static final int NOTIFICATION_ID = 3027;
     private static final String ACTION_STOP = "fr.magiclockscreen.android.STOP";
-
     private final AtomicBoolean running = new AtomicBoolean(false);
     private Thread worker;
 
@@ -43,22 +42,22 @@ public class MagicListenService extends Service {
 
     private void startListening() {
         if (running.getAndSet(true)) return;
-        final Context appContext = getApplicationContext();
-        final String backend = MagicPrefs.backend(appContext);
-        final String token = MagicPrefs.token(appContext);
-        final long intervalMs = Math.max(1, Math.min(MagicPrefs.intervalSeconds(appContext), 60)) * 1000L;
-        final long endAt = System.currentTimeMillis() + Math.max(1, Math.min(MagicPrefs.durationMinutes(appContext), 240)) * 60000L;
+        Context app = getApplicationContext();
+        long intervalMs = Math.max(1, Math.min(60, MagicPrefs.intervalSeconds(app))) * 1000L;
+        long durationMs = Math.max(1, Math.min(240, MagicPrefs.durationMinutes(app))) * 60000L;
+        long endAt = System.currentTimeMillis() + durationMs;
 
         worker = new Thread(() -> {
             while (running.get() && System.currentTimeMillis() < endAt) {
                 try {
-                    MagicWallpaperClient.MagicResult current = MagicWallpaperClient.fetchValue(backend, token);
-                    String last = MagicPrefs.lastHash(appContext);
-                    if (current.hash != null && current.hash.length() > 0 && !current.hash.equals(last)) {
-                        MagicWallpaperClient.MagicResult updated = MagicWallpaperClient.updateLockscreen(appContext, backend, token);
-                        MagicPrefs.setLastHash(appContext, updated.hash);
+                    MagicResult current = MagicStandaloneClient.fetchValue(app);
+                    String last = MagicPrefs.lastHash(app);
+                    if (current.hash != null && !current.hash.equals(last)) {
+                        MagicResult updated = MagicStandaloneClient.updateLockscreen(app);
+                        MagicPrefs.setLastHash(app, updated.hash);
                     }
                 } catch (Exception ignored) {
+                    // On réessaie au cycle suivant.
                 }
                 try {
                     Thread.sleep(intervalMs);
@@ -79,18 +78,24 @@ public class MagicListenService extends Service {
     }
 
     private Notification createNotification() {
-        String channelId = "magic_lockscreen_listen";
+        String channelId = "magic_lockscreen_standalone";
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, "Magic Lockscreen", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel channel = new NotificationChannel(
+                    channelId,
+                    "Magic Lockscreen",
+                    NotificationManager.IMPORTANCE_LOW
+            );
             channel.setShowBadge(false);
             getSystemService(NotificationManager.class).createNotificationChannel(channel);
         }
+
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(this, channelId)
                 : new Notification.Builder(this);
+
         return builder
                 .setContentTitle("Magic Lockscreen actif")
-                .setContentText("Écoute Inject en cours")
+                .setContentText("Écoute directe de l’URL Inject")
                 .setSmallIcon(android.R.drawable.ic_menu_upload)
                 .setOngoing(true)
                 .build();
@@ -98,8 +103,11 @@ public class MagicListenService extends Service {
 
     public static void start(Context context) {
         Intent intent = new Intent(context, MagicListenService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent);
-        else context.startService(intent);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(intent);
+        } else {
+            context.startService(intent);
+        }
     }
 
     public static void stop(Context context) {

@@ -7,22 +7,11 @@ public class MagicTileService extends TileService {
     @Override
     public void onClick() {
         super.onClick();
-
         setTileState(Tile.STATE_ACTIVE, "Magic...");
-
         new Thread(() -> {
             try {
-                String backend = MagicPrefs.backend(getApplicationContext());
-                String token = MagicPrefs.token(getApplicationContext());
-
-                if (!backend.isEmpty() && !token.isEmpty()) {
-                    MagicWallpaperClient.MagicResult result = MagicWallpaperClient.updateLockscreen(
-                            getApplicationContext(),
-                            backend,
-                            token
-                    );
-                    MagicPrefs.setLastHash(getApplicationContext(), result.hash);
-                }
+                MagicResult result = MagicStandaloneClient.updateLockscreen(getApplicationContext());
+                MagicPrefs.setLastHash(getApplicationContext(), result.hash);
             } catch (Exception ignored) {
             } finally {
                 setTileState(Tile.STATE_INACTIVE, "Magic Lock");
@@ -32,7 +21,6 @@ public class MagicTileService extends TileService {
 
     private void setTileState(int state, String label) {
         Tile tile = getQsTile();
-
         if (tile != null) {
             tile.setState(state);
             tile.setLabel(label);

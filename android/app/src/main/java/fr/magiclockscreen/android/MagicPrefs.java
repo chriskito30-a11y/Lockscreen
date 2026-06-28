@@ -4,7 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 public final class MagicPrefs {
-    private static final String NAME = "magic_lockscreen_prefs";
+    private static final String NAME = "magic_lockscreen_standalone_prefs";
 
     private MagicPrefs() {}
 
@@ -12,16 +12,20 @@ public final class MagicPrefs {
         return context.getSharedPreferences(NAME, Context.MODE_PRIVATE);
     }
 
-    public static String backend(Context context) {
-        return prefs(context).getString("backend", "");
+    public static String sourceUrl(Context context) {
+        return prefs(context).getString("sourceUrl", "");
     }
 
-    public static String token(Context context) {
-        return prefs(context).getString("token", "");
+    public static String jsonPath(Context context) {
+        return prefs(context).getString("jsonPath", "value");
+    }
+
+    public static String lang(Context context) {
+        return prefs(context).getString("lang", "fr");
     }
 
     public static int intervalSeconds(Context context) {
-        return prefs(context).getInt("interval", 2);
+        return prefs(context).getInt("interval", 3);
     }
 
     public static int durationMinutes(Context context) {
@@ -32,21 +36,17 @@ public final class MagicPrefs {
         return prefs(context).getString("lastHash", "");
     }
 
-    public static void setLastHash(Context context, String hash) {
-        prefs(context).edit().putString("lastHash", hash).apply();
+    public static void saveConfig(Context context, String sourceUrl, String jsonPath, String lang, int interval, int duration) {
+        prefs(context).edit()
+                .putString("sourceUrl", sourceUrl.trim())
+                .putString("jsonPath", jsonPath.trim().isEmpty() ? "value" : jsonPath.trim())
+                .putString("lang", lang.trim().isEmpty() ? "fr" : lang.trim())
+                .putInt("interval", Math.max(1, Math.min(60, interval)))
+                .putInt("duration", Math.max(1, Math.min(240, duration)))
+                .apply();
     }
 
-    public static void saveConfig(Context context, String backend, String token, int interval, int duration) {
-        String cleanBackend = backend == null ? "" : backend.trim();
-        while (cleanBackend.endsWith("/")) {
-            cleanBackend = cleanBackend.substring(0, cleanBackend.length() - 1);
-        }
-
-        prefs(context).edit()
-                .putString("backend", cleanBackend)
-                .putString("token", token == null ? "" : token.trim())
-                .putInt("interval", Math.max(1, Math.min(interval, 60)))
-                .putInt("duration", Math.max(1, Math.min(duration, 240)))
-                .apply();
+    public static void setLastHash(Context context, String hash) {
+        prefs(context).edit().putString("lastHash", hash).apply();
     }
 }

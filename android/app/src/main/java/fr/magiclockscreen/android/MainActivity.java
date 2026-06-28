@@ -14,8 +14,9 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 public class MainActivity extends Activity {
-    private EditText backendEdit;
-    private EditText tokenEdit;
+    private EditText sourceEdit;
+    private EditText pathEdit;
+    private EditText langEdit;
     private EditText intervalEdit;
     private EditText durationEdit;
     private TextView statusText;
@@ -28,8 +29,10 @@ public class MainActivity extends Activity {
     }
 
     private void requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 100);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 100);
+            }
         }
     }
 
@@ -40,113 +43,154 @@ public class MainActivity extends Activity {
         root.setPadding(36, 48, 36, 48);
         root.setBackgroundColor(Color.rgb(5, 8, 22));
 
-        TextView title = label("Magic Lockscreen", 28, Color.WHITE);
+        TextView title = new TextView(this);
+        title.setText("Magic Lockscreen");
+        title.setTextSize(28f);
+        title.setTextColor(Color.WHITE);
         title.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.addView(title);
-        root.addView(label("Écoute Inject via ton backend Vercel et met à jour le fond d’écran verrouillé Android.", 15, Color.rgb(203, 213, 225)));
 
-        backendEdit = input("Backend base URL", MagicPrefs.backend(this));
-        tokenEdit = input("Token dashboard", MagicPrefs.token(this));
-        tokenEdit.setMinLines(3);
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Version autonome : colle ton URL Inject, l’app lit la valeur, cherche la photo Wikipédia et change le lockscreen. Aucun serveur.");
+        subtitle.setTextSize(15f);
+        subtitle.setTextColor(Color.rgb(203, 213, 225));
+        subtitle.setPadding(0, 20, 0, 28);
+
+        sourceEdit = input("URL Inject /selection", MagicPrefs.sourceUrl(this));
+        pathEdit = input("Clé JSON, ex : value ou selection", MagicPrefs.jsonPath(this));
+        langEdit = input("Langue Wikipédia, ex : fr ou en", MagicPrefs.lang(this));
         intervalEdit = input("Intervalle en secondes", String.valueOf(MagicPrefs.intervalSeconds(this)));
         durationEdit = input("Durée en minutes", String.valueOf(MagicPrefs.durationMinutes(this)));
 
-        root.addView(label("Backend", 14, Color.rgb(203, 213, 225)));
-        root.addView(backendEdit);
-        root.addView(label("Token", 14, Color.rgb(203, 213, 225)));
-        root.addView(tokenEdit);
-        root.addView(label("Intervalle", 14, Color.rgb(203, 213, 225)));
-        root.addView(intervalEdit);
-        root.addView(label("Durée", 14, Color.rgb(203, 213, 225)));
-        root.addView(durationEdit);
+        Button saveButton = button("Sauvegarder");
+        Button testValueButton = button("Tester la valeur Inject");
+        Button applyButton = button("Appliquer la photo maintenant");
+        Button listenButton = button("Activer l’écoute");
+        Button stopButton = button("Stopper l’écoute");
 
-        Button save = button("Sauvegarder");
-        Button test = button("Tester maintenant");
-        Button listen = button("Activer l’écoute");
-        Button stop = button("Stopper l’écoute");
-        root.addView(save);
-        root.addView(test);
-        root.addView(listen);
-        root.addView(stop);
+        statusText = new TextView(this);
+        statusText.setText("Prêt.");
+        statusText.setTextSize(16f);
+        statusText.setTextColor(Color.rgb(226, 232, 240));
+        statusText.setPadding(0, 28, 0, 0);
 
-        statusText = label("Prêt.", 16, Color.rgb(226, 232, 240));
-        root.addView(statusText);
-
-        save.setOnClickListener(v -> {
+        saveButton.setOnClickListener(v -> {
             saveConfig();
             status("Configuration sauvegardée.");
         });
 
-        test.setOnClickListener(v -> {
+        testValueButton.setOnClickListener(v -> {
             saveConfig();
-            status("Test en cours...");
+            status("Lecture Inject...");
             new Thread(() -> {
                 try {
-                    MagicWallpaperClient.MagicResult result = MagicWallpaperClient.updateLockscreen(this, backendEdit.getText().toString(), tokenEdit.getText().toString());
-                    MagicPrefs.setLastHash(this, result.hash);
-                    status("Lockscreen mis à jour : " + result.value);
+                    MagicResult result = MagicStandaloneClient.fetchValue(this);
+                    status("Valeur détectée : " + result.value);
                 } catch (Exception e) {
-                    status("Erreur : " + (e.getMessage() == null ? "test impossible" : e.getMessage()));
+                    status("Erreur valeur : " + safeMessage(e));
                 }
             }).start();
         });
 
-        listen.setOnClickListener(v -> {
+        applyButton.setOnClickListener(v -> {
+            saveConfig();
+            status("Recherche photo et application...");
+            new Thread(() -> {
+                try {
+                    MagicResult result = MagicStandaloneClient.updateLockscreen(this);
+                    MagicPrefs.setLastHash(this, result.hash);
+                    status("Lockscreen mis à jour : " + result.value + " / " + result.title);
+                } catch (Exception e) {
+                    status("Erreur photo : " + safeMessage(e));
+                }
+            }).start();
+        });
+
+        listenButton.setOnClickListener(v -> {
             saveConfig();
             MagicListenService.start(this);
             status("Écoute activée. Tu peux verrouiller le téléphone.");
         });
 
-        stop.setOnClickListener(v -> {
+        stopButton.setOnClickListener(v -> {
             MagicListenService.stop(this);
             status("Écoute stoppée.");
         });
+
+        root.addView(title);
+        root.addView(subtitle);
+        root.addView(label("URL source Inject"));
+        root.addView(sourceEdit);
+        root.addView(label("Clé JSON"));
+        root.addView(pathEdit);
+        root.addView(label("Langue Wikipédia"));
+        root.addView(langEdit);
+        root.addView(label("Intervalle"));
+        root.addView(intervalEdit);
+        root.addView(label("Durée"));
+        root.addView(durationEdit);
+        root.addView(saveButton);
+        root.addView(testValueButton);
+        root.addView(applyButton);
+        root.addView(listenButton);
+        root.addView(stopButton);
+        root.addView(statusText);
 
         scroll.addView(root);
         setContentView(scroll);
     }
 
     private EditText input(String hint, String value) {
-        EditText edit = new EditText(this);
-        edit.setHint(hint);
-        edit.setText(value == null ? "" : value);
-        edit.setTextSize(16);
-        edit.setTextColor(Color.WHITE);
-        edit.setHintTextColor(Color.rgb(148, 163, 184));
-        edit.setSingleLine(false);
-        edit.setPadding(18, 12, 18, 12);
-        return edit;
+        EditText input = new EditText(this);
+        input.setHint(hint);
+        input.setText(value == null ? "" : value);
+        input.setTextSize(16f);
+        input.setTextColor(Color.WHITE);
+        input.setHintTextColor(Color.rgb(148, 163, 184));
+        input.setSingleLine(false);
+        input.setPadding(18, 12, 18, 12);
+        return input;
     }
 
-    private TextView label(String text, int size, int color) {
-        TextView tv = new TextView(this);
-        tv.setText(text);
-        tv.setTextSize(size);
-        tv.setTextColor(color);
-        tv.setPadding(0, 14, 0, 8);
-        return tv;
+    private TextView label(String text) {
+        TextView label = new TextView(this);
+        label.setText(text);
+        label.setTextSize(14f);
+        label.setTextColor(Color.rgb(203, 213, 225));
+        label.setPadding(0, 20, 0, 4);
+        return label;
     }
 
     private Button button(String text) {
-        Button b = new Button(this);
-        b.setText(text);
-        b.setTextSize(16);
-        return b;
+        Button button = new Button(this);
+        button.setText(text);
+        button.setTextSize(16f);
+        return button;
     }
 
     private void saveConfig() {
-        int interval = parse(intervalEdit.getText().toString(), 2, 1, 60);
-        int duration = parse(durationEdit.getText().toString(), 10, 1, 240);
-        MagicPrefs.saveConfig(this, backendEdit.getText().toString(), tokenEdit.getText().toString(), interval, duration);
+        int interval = parseInt(intervalEdit.getText().toString(), 3);
+        int duration = parseInt(durationEdit.getText().toString(), 10);
+        MagicPrefs.saveConfig(
+                this,
+                sourceEdit.getText().toString(),
+                pathEdit.getText().toString(),
+                langEdit.getText().toString(),
+                interval,
+                duration
+        );
     }
 
-    private int parse(String value, int fallback, int min, int max) {
+    private int parseInt(String value, int fallback) {
         try {
-            int n = Integer.parseInt(value.trim());
-            return Math.max(min, Math.min(n, max));
+            return Integer.parseInt(value.trim());
         } catch (Exception e) {
             return fallback;
         }
+    }
+
+    private String safeMessage(Exception e) {
+        String msg = e.getMessage();
+        return msg == null || msg.isEmpty() ? e.getClass().getSimpleName() : msg;
     }
 
     private void status(String message) {

@@ -35,10 +35,7 @@ jobs:
         working-directory: android
         run: |
           pwd
-          find . -maxdepth 5 -type f | sort
-          echo "--- app/build.gradle.kts ---"
           cat app/build.gradle.kts
-          echo "--- AndroidManifest.xml ---"
           cat app/src/main/AndroidManifest.xml
 
       - name: Build debug APK
@@ -48,5 +45,5 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Magic-Lockscreen-Android-debug-apk
+          name: Magic-Lockscreen-Standalone-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk

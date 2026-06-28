@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MagicLockscreenAndroid"
+rootProject.name = "MagicLockscreenStandalone"
 include(":app")
