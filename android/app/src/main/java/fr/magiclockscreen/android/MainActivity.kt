@@ -1,292 +1,178 @@
 package fr.magiclockscreen.android
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import kotlinx.coroutines.launch
+import android.view.Gravity
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 
-class MainActivity : ComponentActivity() {
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { }
+class MainActivity : Activity() {
+    private lateinit var backendEdit: EditText
+    private lateinit var tokenEdit: EditText
+    private lateinit var intervalEdit: EditText
+    private lateinit var durationEdit: EditText
+    private lateinit var statusText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        requestNotificationPermissionIfNeeded()
-
-        setContent {
-            MagicApp()
-        }
+        requestNotificationPermission()
+        buildUi()
     }
 
-    private fun requestNotificationPermissionIfNeeded() {
+    private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val granted = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-            if (!granted) notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-}
-
-@Composable
-fun MagicApp() {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    var backend by remember { mutableStateOf(MagicPrefs.backend(context)) }
-    var token by remember { mutableStateOf(MagicPrefs.token(context)) }
-    var interval by remember { mutableStateOf(MagicPrefs.intervalSeconds(context).toString()) }
-    var duration by remember { mutableStateOf(MagicPrefs.durationMinutes(context).toString()) }
-    var status by remember { mutableStateOf("Prêt.") }
-    var loading by remember { mutableStateOf(false) }
-    var listening by remember { mutableStateOf(MagicPrefs.isListening(context)) }
-
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = Color(0xFF8B5CF6),
-            secondary = Color(0xFF22D3EE),
-            background = Color(0xFF050816),
-            surface = Color(0xFF111827),
-            onPrimary = Color.White,
-            onBackground = Color.White,
-            onSurface = Color.White
-        )
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = Color(0xFF050816)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color(0xFF111827), Color(0xFF050816), Color(0xFF020617))
-                        )
-                    )
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    text = "Magic Lockscreen",
-                    color = Color.White,
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Black
-                )
-
-                Text(
-                    text = "Écoute ton URL Inject via le backend, récupère l’image Wikipédia, puis met à jour le fond d’écran verrouillé Android.",
-                    color = Color(0xFFCBD5E1)
-                )
-
-                MagicCard {
-                    OutlinedTextField(
-                        value = backend,
-                        onValueChange = { backend = it },
-                        label = { Text("Backend base URL") },
-                        placeholder = { Text("https://ton-site.vercel.app") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(Modifier.height(10.dp))
-
-                    OutlinedTextField(
-                        value = token,
-                        onValueChange = { token = it },
-                        label = { Text("Token dashboard") },
-                        placeholder = { Text("v1....") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3
-                    )
-
-                    Spacer(Modifier.height(10.dp))
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            value = interval,
-                            onValueChange = { interval = it.filter(Char::isDigit).take(3) },
-                            label = { Text("Intervalle sec") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = duration,
-                            onValueChange = { duration = it.filter(Char::isDigit).take(3) },
-                            label = { Text("Durée min") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-
-                    Button(
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !loading,
-                        onClick = {
-                            val intervalInt = interval.toIntOrNull()?.coerceIn(1, 60) ?: 2
-                            val durationInt = duration.toIntOrNull()?.coerceIn(1, 240) ?: 10
-                            MagicPrefs.saveConfig(context, backend, token, intervalInt, durationInt)
-                            status = "Configuration sauvegardée."
-                        }
-                    ) {
-                        Text("Sauvegarder")
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Button(
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !loading && backend.isNotBlank() && token.isNotBlank(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)),
-                        onClick = {
-                            loading = true
-                            status = "Test en cours..."
-                            MagicPrefs.saveConfig(
-                                context,
-                                backend,
-                                token,
-                                interval.toIntOrNull()?.coerceIn(1, 60) ?: 2,
-                                duration.toIntOrNull()?.coerceIn(1, 240) ?: 10
-                            )
-                            scope.launch {
-                                try {
-                                    val result = MagicWallpaperClient.updateLockscreen(context, backend, token)
-                                    MagicPrefs.setLastHash(context, result.hash)
-                                    status = "Lockscreen mis à jour : ${result.value}"
-                                } catch (e: Exception) {
-                                    status = "Erreur : ${e.message ?: "test impossible"}"
-                                } finally {
-                                    loading = false
-                                }
-                            }
-                        }
-                    ) {
-                        Text("Tester maintenant")
-                    }
-                }
-
-                MagicCard {
-                    Text(
-                        text = "Mode écoute",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "À activer avant le tour. L’app surveille l’URL même écran verrouillé grâce à une notification silencieuse Android.",
-                        color = Color(0xFFCBD5E1)
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    if (!listening) {
-                        Button(
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = backend.isNotBlank() && token.isNotBlank(),
-                            onClick = {
-                                val intervalInt = interval.toIntOrNull()?.coerceIn(1, 60) ?: 2
-                                val durationInt = duration.toIntOrNull()?.coerceIn(1, 240) ?: 10
-                                MagicPrefs.saveConfig(context, backend, token, intervalInt, durationInt)
-                                MagicListenService.start(context, backend, token, intervalInt, durationInt)
-                                listening = true
-                                status = "Écoute activée pendant $durationInt min, toutes les $intervalInt sec."
-                            }
-                        ) {
-                            Text("Activer l’écoute")
-                        }
-                    } else {
-                        Button(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
-                            onClick = {
-                                MagicListenService.stop(context)
-                                listening = false
-                                status = "Écoute arrêtée."
-                            }
-                        ) {
-                            Text("Stopper l’écoute")
-                        }
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    TextButton(onClick = {
-                        interval = "2"
-                        duration = "10"
-                        status = "Réglage prestation recommandé : 2 sec / 10 min."
-                    }) {
-                        Text("Réglage recommandé : 2 sec / 10 min")
-                    }
-                }
-
-                MagicCard {
-                    Text(
-                        text = "Statut",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(text = status, color = Color(0xFFE2E8F0))
-                }
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
             }
         }
     }
-}
 
-@Composable
-fun MagicCard(content: @Composable Column.() -> Unit) {
-    Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0x1FFFFFFF)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            content = content
+    private fun buildUi() {
+        val scroll = ScrollView(this)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(36, 48, 36, 48)
+            setBackgroundColor(Color.rgb(5, 8, 22))
+        }
+
+        val title = TextView(this).apply {
+            text = "Magic Lockscreen"
+            textSize = 28f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+
+        val subtitle = TextView(this).apply {
+            text = "Écoute Inject via ton backend Vercel et met à jour le fond d’écran verrouillé Android."
+            textSize = 15f
+            setTextColor(Color.rgb(203, 213, 225))
+            setPadding(0, 20, 0, 28)
+        }
+
+        backendEdit = input("Backend base URL", MagicPrefs.backend(this))
+        tokenEdit = input("Token dashboard", MagicPrefs.token(this))
+        tokenEdit.minLines = 3
+
+        intervalEdit = input("Intervalle en secondes", MagicPrefs.intervalSeconds(this).toString())
+        durationEdit = input("Durée en minutes", MagicPrefs.durationMinutes(this).toString())
+
+        val saveButton = button("Sauvegarder")
+        val testButton = button("Tester maintenant")
+        val listenButton = button("Activer l’écoute")
+        val stopButton = button("Stopper l’écoute")
+
+        statusText = TextView(this).apply {
+            text = "Prêt."
+            textSize = 16f
+            setTextColor(Color.rgb(226, 232, 240))
+            setPadding(0, 28, 0, 0)
+        }
+
+        saveButton.setOnClickListener {
+            saveConfig()
+            status("Configuration sauvegardée.")
+        }
+
+        testButton.setOnClickListener {
+            saveConfig()
+            status("Test en cours...")
+            Thread {
+                try {
+                    val result = MagicWallpaperClient.updateLockscreen(
+                        this,
+                        backendEdit.text.toString(),
+                        tokenEdit.text.toString()
+                    )
+                    MagicPrefs.setLastHash(this, result.hash)
+                    status("Lockscreen mis à jour : ${result.value}")
+                } catch (e: Exception) {
+                    status("Erreur : ${e.message ?: "test impossible"}")
+                }
+            }.start()
+        }
+
+        listenButton.setOnClickListener {
+            saveConfig()
+            MagicListenService.start(this)
+            status("Écoute activée. Tu peux verrouiller le téléphone.")
+        }
+
+        stopButton.setOnClickListener {
+            MagicListenService.stop(this)
+            status("Écoute stoppée.")
+        }
+
+        root.addView(title)
+        root.addView(subtitle)
+        root.addView(label("Backend"))
+        root.addView(backendEdit)
+        root.addView(label("Token"))
+        root.addView(tokenEdit)
+        root.addView(label("Intervalle"))
+        root.addView(intervalEdit)
+        root.addView(label("Durée"))
+        root.addView(durationEdit)
+        root.addView(saveButton)
+        root.addView(testButton)
+        root.addView(listenButton)
+        root.addView(stopButton)
+        root.addView(statusText)
+
+        scroll.addView(root)
+        setContentView(scroll)
+    }
+
+    private fun input(hint: String, value: String): EditText {
+        return EditText(this).apply {
+            this.hint = hint
+            setText(value)
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.rgb(148, 163, 184))
+            setSingleLine(false)
+            setPadding(18, 12, 18, 12)
+        }
+    }
+
+    private fun label(text: String): TextView {
+        return TextView(this).apply {
+            this.text = text
+            textSize = 14f
+            setTextColor(Color.rgb(203, 213, 225))
+            setPadding(0, 20, 0, 4)
+        }
+    }
+
+    private fun button(text: String): Button {
+        return Button(this).apply {
+            this.text = text
+            textSize = 16f
+        }
+    }
+
+    private fun saveConfig() {
+        val interval = intervalEdit.text.toString().toIntOrNull()?.coerceIn(1, 60) ?: 2
+        val duration = durationEdit.text.toString().toIntOrNull()?.coerceIn(1, 240) ?: 10
+
+        MagicPrefs.saveConfig(
+            this,
+            backendEdit.text.toString(),
+            tokenEdit.text.toString(),
+            interval,
+            duration
         )
+    }
+
+    private fun status(message: String) {
+        runOnUiThread {
+            statusText.text = message
+        }
     }
 }
