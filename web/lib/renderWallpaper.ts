@@ -17,7 +17,6 @@ function wrapText(input: string, maxChars: number): string[] {
 
   for (const word of words) {
     const next = line ? `${line} ${word}` : word;
-
     if (next.length > maxChars && line) {
       lines.push(line);
       line = word;
@@ -39,47 +38,35 @@ export async function renderWallpaper(params: {
   const { config, revelation, wiki, image } = params;
   const width = config.width || 1080;
   const height = config.height || 2400;
-  const safeRevelation = revelation.trim() || 'Révélation';
+  const value = revelation.trim() || 'Révélation';
+  const hasPhoto = Boolean(image && image.length > 500);
 
   let base: sharp.Sharp;
 
-  // On utilise la photo dès qu'elle existe, même si un ancien token a été créé en text-only.
-  if (image && image.length > 500) {
+  // Toujours utiliser la photo si elle existe, même avec un ancien token créé en text-only.
+  if (hasPhoto && image) {
     base = sharp(image)
-      .resize(width, height, {
-        fit: 'cover',
-        position: 'center'
-      })
-      .modulate({
-        brightness: 0.72,
-        saturation: 0.98
-      });
+      .resize(width, height, { fit: 'cover', position: 'center' })
+      .modulate({ brightness: 0.70, saturation: 0.95 });
   } else {
-    const bgSvg = Buffer.from(`
+    const fallbackSvg = `
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stop-color="#020617"/>
-            <stop offset="48%" stop-color="#0f172a"/>
+            <stop offset="50%" stop-color="#0f172a"/>
             <stop offset="100%" stop-color="#1d4ed8"/>
           </linearGradient>
         </defs>
         <rect width="100%" height="100%" fill="url(#bg)"/>
         <circle cx="${Math.round(width * 0.18)}" cy="${Math.round(height * 0.16)}" r="${Math.round(width * 0.45)}" fill="#2563eb" opacity="0.30"/>
-        <circle cx="${Math.round(width * 0.85)}" cy="${Math.round(height * 0.82)}" r="${Math.round(width * 0.55)}" fill="#7c3aed" opacity="0.22"/>
+        <circle cx="${Math.round(width * 0.84)}" cy="${Math.round(height * 0.82)}" r="${Math.round(width * 0.56)}" fill="#7c3aed" opacity="0.22"/>
       </svg>
-    `);
-
-    base = sharp(bgSvg);
+    `;
+    base = sharp(Buffer.from(fallbackSvg));
   }
 
-  const overlay = buildOverlay({
-    width,
-    height,
-    revelation: safeRevelation,
-    wiki,
-    hasPhoto: Boolean(image && image.length > 500)
-  });
+  const overlay = buildOverlay({ width, height, revelation: value, wiki, hasPhoto });
 
   return base
     .composite([{ input: overlay, top: 0, left: 0 }])
@@ -96,97 +83,80 @@ function buildOverlay(params: {
 }): Buffer {
   const { width, height, revelation, wiki, hasPhoto } = params;
 
-  const titleLines = wrapText(revelation, width > 1200 ? 20 : 15);
-  const titleSize = Math.max(68, Math.round(width * 0.105));
-  const smallSize = Math.max(28, Math.round(width * 0.032));
-  const pad = Math.round(width * 0.07);
+  const lines = wrapText(revelation, width > 1200 ? 18 : 14);
+  const titleSize = Math.max(76, Math.round(width * 0.115));
+  const smallSize = Math.max(30, Math.round(width * 0.034));
+  const centerX = Math.round(width / 2);
 
-  // Zone volontairement très visible au centre, pas en bas,
-  // pour éviter que Samsung/Android masque le texte avec l'horloge.
-  const boxY = Math.round(height * 0.36);
-  const boxH = Math.round(height * 0.30);
-  const startY = boxY + Math.round(boxH * 0.34);
-  const lineGap = Math.round(titleSize * 1.08);
+  // Placé haut/centre pour éviter l'horloge Android et les notifications.
+  const boxX = Math.round(width * 0.055);
+  const boxY = Math.round(height * 0.31);
+  const boxW = Math.round(width * 0.89);
+  const boxH = Math.round(height * 0.36);
+  const firstTextY = boxY + Math.round(boxH * 0.32);
+  const lineGap = Math.round(titleSize * 1.12);
 
-  const tspans = titleLines
-    .map((line, index) => {
-      const dy = index === 0 ? 0 : lineGap;
-      return `<tspan x="${pad}" dy="${dy}">${xmlEscape(line)}</tspan>`;
-    })
-    .join('');
+  const textElements = lines.map((line, index) => {
+    const y = firstTextY + index * lineGap;
+    return `
+      <text x="${centerX}" y="${y}"
+        text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="${titleSize}"
+        font-weight="900"
+        fill="#ffffff"
+        stroke="#000000"
+        stroke-width="7"
+        paint-order="stroke fill"
+        letter-spacing="-2">${xmlEscape(line)}</text>
+    `;
+  }).join('\n');
 
+  const statusLabel = hasPhoto ? 'PHOTO OK' : 'SANS PHOTO';
+  const statusColor = hasPhoto ? '#16a34a' : '#dc2626';
   const sourceText = hasPhoto && wiki.title
     ? `Photo Wikipédia — ${wiki.title}`
     : wiki.title
       ? `Photo non récupérée — ${wiki.title}`
       : 'Photo non récupérée';
 
-  const photoBadge = hasPhoto ? 'PHOTO OK' : 'SANS PHOTO';
-
   const svg = `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#000000" stop-opacity="0.22"/>
+          <stop offset="0%" stop-color="#000000" stop-opacity="0.20"/>
           <stop offset="45%" stop-color="#000000" stop-opacity="0.18"/>
-          <stop offset="100%" stop-color="#000000" stop-opacity="0.78"/>
+          <stop offset="100%" stop-color="#000000" stop-opacity="0.80"/>
         </linearGradient>
-
-        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000000" flood-opacity="0.65"/>
-        </filter>
       </defs>
 
       <rect width="100%" height="100%" fill="url(#fade)"/>
 
-      <rect
-        x="${Math.round(width * 0.045)}"
-        y="${boxY}"
-        width="${Math.round(width * 0.91)}"
-        height="${boxH}"
-        rx="${Math.round(width * 0.06)}"
-        fill="#020617"
-        opacity="0.78"
-        filter="url(#shadow)"
-      />
+      <rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}"
+        rx="${Math.round(width * 0.06)}" fill="#020617" opacity="0.82"/>
 
-      <text
-        x="${pad}"
-        y="${startY}"
-        fill="#ffffff"
-        font-family="Arial, Helvetica, sans-serif"
-        font-size="${titleSize}"
-        font-weight="900"
-        letter-spacing="-2"
-      >${tspans}</text>
+      ${textElements}
 
-      <text
-        x="${pad}"
-        y="${boxY + boxH - Math.round(boxH * 0.13)}"
-        fill="#cbd5e1"
+      <text x="${centerX}" y="${boxY + boxH - Math.round(boxH * 0.13)}"
+        text-anchor="middle"
         font-family="Arial, Helvetica, sans-serif"
         font-size="${smallSize}"
-        font-weight="600"
-      >${xmlEscape(sourceText)}</text>
+        font-weight="700"
+        fill="#e2e8f0"
+        stroke="#000000"
+        stroke-width="3"
+        paint-order="stroke fill">${xmlEscape(sourceText)}</text>
 
-      <rect
-        x="${pad}"
-        y="${Math.round(height * 0.08)}"
-        width="${Math.round(width * 0.32)}"
-        height="${Math.round(height * 0.045)}"
-        rx="${Math.round(width * 0.025)}"
-        fill="${hasPhoto ? '#16a34a' : '#dc2626'}"
-        opacity="0.92"
-      />
+      <rect x="${Math.round(width * 0.07)}" y="${Math.round(height * 0.08)}"
+        width="${Math.round(width * 0.34)}" height="${Math.round(height * 0.055)}"
+        rx="${Math.round(width * 0.025)}" fill="${statusColor}" opacity="0.95"/>
 
-      <text
-        x="${pad + Math.round(width * 0.035)}"
-        y="${Math.round(height * 0.111)}"
-        fill="#ffffff"
+      <text x="${Math.round(width * 0.24)}" y="${Math.round(height * 0.118)}"
+        text-anchor="middle"
         font-family="Arial, Helvetica, sans-serif"
-        font-size="${Math.round(width * 0.032)}"
-        font-weight="800"
-      >${photoBadge}</text>
+        font-size="${Math.round(width * 0.034)}"
+        font-weight="900"
+        fill="#ffffff">${statusLabel}</text>
     </svg>
   `;
 
