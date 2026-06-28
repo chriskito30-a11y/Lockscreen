@@ -4,7 +4,7 @@ Version Android autonome, sans Vercel et sans token.
 
 ## Fonctionnement
 
-1. Coller l'URL Inject / WikiTest, par exemple `https://11z.co/_w/15999/selection`.
+1. Coller l'URL Inject / WikiTest, par exemple `https://11z.co/_w/MON_ID/selection`.
 2. Appuyer sur **Scanner l’URL**.
 3. Choisir la donnée détectée, par exemple `value → Bob Marley`.
 4. Sauvegarder.

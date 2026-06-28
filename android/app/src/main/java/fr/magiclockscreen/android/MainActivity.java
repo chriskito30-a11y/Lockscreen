@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         LinearLayout configCard = cardLayout();
         configCard.addView(sectionTitle("Configuration"));
         configCard.addView(label("URL source Inject / WikiTest"));
-        sourceEdit = input("https://11z.co/_w/15999/selection", MagicPrefs.sourceUrl(this));
+        sourceEdit = input("https://11z.co/_w/MON_ID/selection", MagicPrefs.sourceUrl(this));
         configCard.addView(sourceEdit);
 
         Button scanButton = primaryButton("Scanner l’URL");
@@ -157,6 +157,14 @@ public class MainActivity extends Activity {
         statusText.setTextColor(Color.rgb(226, 232, 240));
         statusText.setPadding(dp(4), dp(20), dp(4), 0);
         root.addView(statusText);
+
+        TextView footer = new TextView(this);
+        footer.setText("modulys.top");
+        footer.setTextSize(13f);
+        footer.setTextColor(Color.rgb(148, 163, 184));
+        footer.setGravity(Gravity.CENTER_HORIZONTAL);
+        footer.setPadding(0, dp(22), 0, 0);
+        root.addView(footer);
 
         scanSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(AdapterView<?> parent, android.view.View view, int position, long id) {
