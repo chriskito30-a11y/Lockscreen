@@ -146,11 +146,34 @@ public class MainActivity extends Activity {
         configCard.addView(imageProviderSpinner);
 
         TextView googleInfo = new TextView(this);
-        googleInfo.setText("Google Images nécessite une clé API Google Custom Search et un CX. Sans ces champs, le mode Auto utilise Wikipédia.");
+        googleInfo.setText("Pour utiliser Google Images : 1) active Custom Search JSON API, 2) crée une clé API, 3) crée un moteur Programmable Search, 4) copie son Search Engine ID / CX. Les boutons ci-dessous ouvrent les pages utiles.");
         googleInfo.setTextSize(13f);
         googleInfo.setTextColor(Color.rgb(186, 230, 253));
-        googleInfo.setPadding(0, dp(10), 0, 0);
+        googleInfo.setPadding(0, dp(10), 0, dp(8));
         configCard.addView(googleInfo);
+
+        Button enableGoogleApiButton = secondaryButton("1. Activer Custom Search API");
+        enableGoogleApiButton.setOnClickListener(v -> openWeb("https://console.cloud.google.com/apis/library/customsearch.googleapis.com"));
+        configCard.addView(enableGoogleApiButton);
+
+        Button createGoogleKeyButton = secondaryButton("2. Créer / copier la clé API");
+        createGoogleKeyButton.setOnClickListener(v -> openWeb("https://console.cloud.google.com/apis/credentials"));
+        configCard.addView(createGoogleKeyButton);
+
+        Button createCxButton = secondaryButton("3. Créer le moteur de recherche CX");
+        createCxButton.setOnClickListener(v -> openWeb("https://programmablesearchengine.google.com/controlpanel/create"));
+        configCard.addView(createCxButton);
+
+        Button findCxButton = secondaryButton("4. Retrouver mon Search Engine ID / CX");
+        findCxButton.setOnClickListener(v -> openWeb("https://programmablesearchengine.google.com/controlpanel/all"));
+        configCard.addView(findCxButton);
+
+        TextView googleTip = new TextView(this);
+        googleTip.setText("Astuce : dans le moteur Programmable Search, active ‘Rechercher sur tout le Web’ pour trouver des images générales comme cartes, objets, célébrités ou logos.");
+        googleTip.setTextSize(13f);
+        googleTip.setTextColor(Color.rgb(226, 232, 240));
+        googleTip.setPadding(0, dp(10), 0, 0);
+        configCard.addView(googleTip);
 
         configCard.addView(label("Google API Key (optionnel)"));
         googleKeyEdit = input("AIza...", MagicPrefs.googleApiKey(this));
@@ -386,6 +409,14 @@ public class MainActivity extends Activity {
         int idx = imageProviderSpinner == null ? 0 : imageProviderSpinner.getSelectedItemPosition();
         if (idx < 0 || idx >= providerValues.length) return "auto";
         return providerValues[idx];
+    }
+
+    private void openWeb(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception e) {
+            status("Impossible d’ouvrir le lien : " + url);
+        }
     }
 
     private void saveConfig() {
