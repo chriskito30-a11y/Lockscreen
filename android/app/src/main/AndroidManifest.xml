@@ -8,7 +8,9 @@
 
     <application
         android:theme="@style/AppTheme"
-        android:label="Magic Lockscreen"
+        android:label="Modulys Magic Lock"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
         android:usesCleartextTraffic="false">
 
@@ -29,7 +31,7 @@
         <service
             android:name=".MagicTileService"
             android:label="Magic Lock"
-            android:icon="@android:drawable/ic_menu_upload"
+            android:icon="@drawable/ic_magic_tile"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
             <intent-filter>

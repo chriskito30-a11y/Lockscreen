@@ -4,14 +4,23 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity {
     private EditText sourceEdit;
@@ -20,6 +29,18 @@ public class MainActivity extends Activity {
     private EditText intervalEdit;
     private EditText durationEdit;
     private TextView statusText;
+    private TextView scanText;
+    private Spinner scanSpinner;
+    private final List<ScanCandidate> candidates = new ArrayList<>();
+
+    private final int bgTop = Color.rgb(9, 14, 35);
+    private final int bgBottom = Color.rgb(28, 17, 65);
+    private final int card = Color.rgb(15, 23, 42);
+    private final int card2 = Color.rgb(17, 24, 50);
+    private final int text = Color.WHITE;
+    private final int muted = Color.rgb(203, 213, 225);
+    private final int purple = Color.rgb(139, 92, 246);
+    private final int cyan = Color.rgb(34, 211, 238);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,40 +59,127 @@ public class MainActivity extends Activity {
 
     private void buildUi() {
         ScrollView scroll = new ScrollView(this);
+        GradientDrawable rootBg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{bgTop, bgBottom});
+        scroll.setBackground(rootBg);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(36, 48, 36, 48);
-        root.setBackgroundColor(Color.rgb(5, 8, 22));
+        root.setPadding(dp(20), dp(28), dp(20), dp(28));
+
+        TextView logo = new TextView(this);
+        logo.setText("✦");
+        logo.setTextSize(34f);
+        logo.setGravity(Gravity.CENTER);
+        logo.setTextColor(Color.WHITE);
+        logo.setTypeface(Typeface.DEFAULT_BOLD);
+        GradientDrawable logoBg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{purple, Color.rgb(236, 72, 153), cyan});
+        logoBg.setShape(GradientDrawable.OVAL);
+        logo.setBackground(logoBg);
+        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(dp(72), dp(72));
+        logoParams.gravity = Gravity.CENTER_HORIZONTAL;
+        root.addView(logo, logoParams);
 
         TextView title = new TextView(this);
-        title.setText("Magic Lockscreen");
-        title.setTextSize(28f);
+        title.setText("Modulys Magic Lock");
+        title.setTextSize(30f);
         title.setTextColor(Color.WHITE);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setGravity(Gravity.CENTER_HORIZONTAL);
+        title.setPadding(0, dp(16), 0, 0);
+        root.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Version autonome : colle ton URL Inject, l’app lit la valeur, cherche la photo Wikipédia et change le lockscreen. Aucun serveur.");
+        subtitle.setText("APK autonome : scanne ton JSON Inject, choisis la valeur à écouter, puis affiche automatiquement la photo Wikipédia sur le lockscreen.");
         subtitle.setTextSize(15f);
-        subtitle.setTextColor(Color.rgb(203, 213, 225));
-        subtitle.setPadding(0, 20, 0, 28);
+        subtitle.setTextColor(muted);
+        subtitle.setGravity(Gravity.CENTER_HORIZONTAL);
+        subtitle.setPadding(0, dp(10), 0, dp(22));
+        root.addView(subtitle);
 
-        sourceEdit = input("URL Inject /selection", MagicPrefs.sourceUrl(this));
-        pathEdit = input("Clé JSON, ex : value ou selection", MagicPrefs.jsonPath(this));
-        langEdit = input("Langue Wikipédia, ex : fr ou en", MagicPrefs.lang(this));
-        intervalEdit = input("Intervalle en secondes", String.valueOf(MagicPrefs.intervalSeconds(this)));
-        durationEdit = input("Durée en minutes", String.valueOf(MagicPrefs.durationMinutes(this)));
+        LinearLayout configCard = cardLayout();
+        configCard.addView(sectionTitle("Configuration"));
+        configCard.addView(label("URL source Inject / WikiTest"));
+        sourceEdit = input("https://11z.co/_w/15999/selection", MagicPrefs.sourceUrl(this));
+        configCard.addView(sourceEdit);
 
-        Button saveButton = button("Sauvegarder");
-        Button testValueButton = button("Tester la valeur Inject");
-        Button applyButton = button("Appliquer la photo maintenant");
-        Button listenButton = button("Activer l’écoute");
-        Button stopButton = button("Stopper l’écoute");
+        Button scanButton = primaryButton("Scanner l’URL");
+        configCard.addView(scanButton);
+
+        configCard.addView(label("Choix détecté"));
+        scanSpinner = new Spinner(this);
+        scanSpinner.setPadding(dp(10), dp(8), dp(10), dp(8));
+        scanSpinner.setBackground(inputBg());
+        configCard.addView(scanSpinner);
+
+        scanText = new TextView(this);
+        scanText.setText("Aucun scan pour l’instant.");
+        scanText.setTextSize(14f);
+        scanText.setTextColor(Color.rgb(186, 230, 253));
+        scanText.setPadding(0, dp(10), 0, dp(2));
+        configCard.addView(scanText);
+
+        configCard.addView(label("Clé JSON à écouter"));
+        pathEdit = input("value ou selection", MagicPrefs.jsonPath(this));
+        configCard.addView(pathEdit);
+
+        configCard.addView(label("Langue Wikipédia"));
+        langEdit = input("fr", MagicPrefs.lang(this));
+        configCard.addView(langEdit);
+
+        root.addView(configCard);
+
+        LinearLayout actionCard = cardLayout();
+        actionCard.addView(sectionTitle("Action"));
+        actionCard.addView(label("Intervalle d’écoute en secondes"));
+        intervalEdit = input("3", String.valueOf(MagicPrefs.intervalSeconds(this)));
+        actionCard.addView(intervalEdit);
+        actionCard.addView(label("Durée d’écoute en minutes"));
+        durationEdit = input("10", String.valueOf(MagicPrefs.durationMinutes(this)));
+        actionCard.addView(durationEdit);
+
+        Button saveButton = secondaryButton("Sauvegarder");
+        Button testValueButton = secondaryButton("Tester la valeur");
+        Button applyButton = primaryButton("Appliquer la photo maintenant");
+        Button listenButton = primaryButton("Activer l’écoute");
+        Button stopButton = dangerButton("Stopper l’écoute");
+
+        actionCard.addView(saveButton);
+        actionCard.addView(testValueButton);
+        actionCard.addView(applyButton);
+        actionCard.addView(listenButton);
+        actionCard.addView(stopButton);
+
+        root.addView(actionCard);
 
         statusText = new TextView(this);
         statusText.setText("Prêt.");
-        statusText.setTextSize(16f);
+        statusText.setTextSize(15f);
         statusText.setTextColor(Color.rgb(226, 232, 240));
-        statusText.setPadding(0, 28, 0, 0);
+        statusText.setPadding(dp(4), dp(20), dp(4), 0);
+        root.addView(statusText);
+
+        scanSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, android.view.View view, int position, long id) {
+                if (position >= 0 && position < candidates.size()) {
+                    ScanCandidate c = candidates.get(position);
+                    pathEdit.setText(c.path == null || c.path.isEmpty() ? "raw" : c.path);
+                }
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
+
+        scanButton.setOnClickListener(v -> {
+            status("Scan en cours...");
+            new Thread(() -> {
+                try {
+                    List<ScanCandidate> found = MagicStandaloneClient.scanSource(sourceEdit.getText().toString());
+                    runOnUiThread(() -> applyScanResults(found));
+                    status("Scan terminé : " + found.size() + " donnée(s) trouvée(s).");
+                } catch (Exception e) {
+                    status("Erreur scan : " + safeMessage(e));
+                }
+            }).start();
+        });
 
         saveButton.setOnClickListener(v -> {
             saveConfig();
@@ -116,76 +224,115 @@ public class MainActivity extends Activity {
             status("Écoute stoppée.");
         });
 
-        root.addView(title);
-        root.addView(subtitle);
-        root.addView(label("URL source Inject"));
-        root.addView(sourceEdit);
-        root.addView(label("Clé JSON"));
-        root.addView(pathEdit);
-        root.addView(label("Langue Wikipédia"));
-        root.addView(langEdit);
-        root.addView(label("Intervalle"));
-        root.addView(intervalEdit);
-        root.addView(label("Durée"));
-        root.addView(durationEdit);
-        root.addView(saveButton);
-        root.addView(testValueButton);
-        root.addView(applyButton);
-        root.addView(listenButton);
-        root.addView(stopButton);
-        root.addView(statusText);
-
         scroll.addView(root);
         setContentView(scroll);
+    }
+
+    private void applyScanResults(List<ScanCandidate> found) {
+        candidates.clear();
+        candidates.addAll(found);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels(found));
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        scanSpinner.setAdapter(adapter);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < Math.min(found.size(), 12); i++) {
+            sb.append("• ").append(found.get(i).toString()).append("\n");
+        }
+        scanText.setText(sb.toString().trim());
+        if (!found.isEmpty()) pathEdit.setText(found.get(0).path);
+    }
+
+    private List<String> labels(List<ScanCandidate> found) {
+        List<String> out = new ArrayList<>();
+        for (ScanCandidate c : found) out.add(c.toString());
+        return out;
+    }
+
+    private LinearLayout cardLayout() {
+        LinearLayout cardView = new LinearLayout(this);
+        cardView.setOrientation(LinearLayout.VERTICAL);
+        cardView.setPadding(dp(18), dp(18), dp(18), dp(18));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(card);
+        bg.setCornerRadius(dp(24));
+        bg.setStroke(dp(1), Color.argb(95, 148, 163, 184));
+        cardView.setBackground(bg);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, dp(12), 0, dp(12));
+        cardView.setLayoutParams(params);
+        return cardView;
+    }
+
+    private TextView sectionTitle(String text) {
+        TextView t = new TextView(this);
+        t.setText(text);
+        t.setTextColor(Color.WHITE);
+        t.setTextSize(21f);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setPadding(0, 0, 0, dp(10));
+        return t;
     }
 
     private EditText input(String hint, String value) {
         EditText input = new EditText(this);
         input.setHint(hint);
         input.setText(value == null ? "" : value);
-        input.setTextSize(16f);
+        input.setTextSize(15f);
         input.setTextColor(Color.WHITE);
         input.setHintTextColor(Color.rgb(148, 163, 184));
         input.setSingleLine(false);
-        input.setPadding(18, 12, 18, 12);
+        input.setMinLines(1);
+        input.setPadding(dp(14), dp(10), dp(14), dp(10));
+        input.setBackground(inputBg());
         return input;
+    }
+
+    private GradientDrawable inputBg() {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(card2);
+        bg.setCornerRadius(dp(16));
+        bg.setStroke(dp(1), Color.argb(100, 148, 163, 184));
+        return bg;
     }
 
     private TextView label(String text) {
         TextView label = new TextView(this);
         label.setText(text);
-        label.setTextSize(14f);
-        label.setTextColor(Color.rgb(203, 213, 225));
-        label.setPadding(0, 20, 0, 4);
+        label.setTextSize(13f);
+        label.setTypeface(Typeface.DEFAULT_BOLD);
+        label.setTextColor(muted);
+        label.setPadding(0, dp(14), 0, dp(6));
         return label;
     }
 
-    private Button button(String text) {
+    private Button primaryButton(String text) { return styledButton(text, purple, Color.WHITE); }
+    private Button secondaryButton(String text) { return styledButton(text, Color.rgb(30, 41, 59), Color.WHITE); }
+    private Button dangerButton(String text) { return styledButton(text, Color.rgb(127, 29, 29), Color.WHITE); }
+
+    private Button styledButton(String text, int color, int textColor) {
         Button button = new Button(this);
         button.setText(text);
-        button.setTextSize(16f);
+        button.setTextSize(15f);
+        button.setTextColor(textColor);
+        button.setTypeface(Typeface.DEFAULT_BOLD);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(color);
+        bg.setCornerRadius(dp(16));
+        button.setBackground(bg);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+        params.setMargins(0, dp(10), 0, 0);
+        button.setLayoutParams(params);
         return button;
     }
 
     private void saveConfig() {
         int interval = parseInt(intervalEdit.getText().toString(), 3);
         int duration = parseInt(durationEdit.getText().toString(), 10);
-        MagicPrefs.saveConfig(
-                this,
-                sourceEdit.getText().toString(),
-                pathEdit.getText().toString(),
-                langEdit.getText().toString(),
-                interval,
-                duration
-        );
+        MagicPrefs.saveConfig(this, sourceEdit.getText().toString(), pathEdit.getText().toString(), langEdit.getText().toString(), interval, duration);
     }
 
     private int parseInt(String value, int fallback) {
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (Exception e) {
-            return fallback;
-        }
+        try { return Integer.parseInt(value.trim()); } catch (Exception e) { return fallback; }
     }
 
     private String safeMessage(Exception e) {
@@ -195,5 +342,9 @@ public class MainActivity extends Activity {
 
     private void status(String message) {
         runOnUiThread(() -> statusText.setText(message));
+    }
+
+    private int dp(int value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 }
