@@ -10,7 +10,26 @@ android {
         applicationId = "fr.magiclockscreen.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
+        versionCode = 10
         versionName = "2.0.0"
+    }
+
+    signingConfigs {
+        create("modulys") {
+            storeFile = file("../modulys-magic-lock.keystore")
+            storePassword = "modulysmagiclock"
+            keyAlias = "modulysmagiclock"
+            keyPassword = "modulysmagiclock"
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("modulys")
+        }
+        release {
+            signingConfig = signingConfigs.getByName("modulys")
+            isMinifyEnabled = false
+        }
     }
 }
