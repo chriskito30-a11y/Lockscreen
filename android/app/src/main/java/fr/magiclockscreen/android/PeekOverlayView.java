@@ -5,15 +5,19 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.view.MotionEvent;
 import android.view.View;
 
 public class PeekOverlayView extends View {
+    public interface ChangeListener { void onPeekChanged(PeekOverlayView view); }
+
     private Bitmap image;
     private String previewText = "Exemple";
     private float x = 0.12f, y = 0.70f, w = 0.76f, h = 0.14f;
+    private float rotation = 0f;
     private int textSize = 46;
     private int textColor = Color.WHITE;
     private int opacity = 100;
@@ -21,14 +25,29 @@ public class PeekOverlayView extends View {
     private boolean italic = false;
     private String align = "center";
     private boolean shadow = true;
+    private boolean selected = true;
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint boxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint handlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint rotatePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private RectF imageRect = new RectF();
     private RectF boxRect = new RectF();
+    private RectF touchRect = new RectF();
     private int mode = 0;
     private float lastX, lastY;
+    private float startTouchX, startTouchY;
+    private float startX, startY, startW, startH, startRotation;
+    private ChangeListener changeListener;
+
+    private static final int MODE_NONE = 0;
+    private static final int MODE_MOVE = 1;
+    private static final int MODE_RESIZE_BR = 2;
+    private static final int MODE_RESIZE_BL = 3;
+    private static final int MODE_RESIZE_TR = 4;
+    private static final int MODE_RESIZE_TL = 5;
+    private static final int MODE_ROTATE = 6;
 
     public PeekOverlayView(Context context) {
         super(context);
@@ -36,13 +55,19 @@ public class PeekOverlayView extends View {
         boxPaint.setStyle(Paint.Style.STROKE);
         boxPaint.setStrokeWidth(dp(2));
         boxPaint.setColor(Color.rgb(34, 211, 238));
+        fillPaint.setStyle(Paint.Style.FILL);
+        fillPaint.setColor(Color.argb(28, 34, 211, 238));
         handlePaint.setStyle(Paint.Style.FILL);
         handlePaint.setColor(Color.rgb(139, 92, 246));
+        rotatePaint.setStyle(Paint.Style.FILL);
+        rotatePaint.setColor(Color.rgb(34, 211, 238));
     }
 
+    public void setChangeListener(ChangeListener listener) { this.changeListener = listener; }
     public void setImage(Bitmap image) { this.image = image; invalidate(); }
     public void setPreviewText(String text) { this.previewText = text == null || text.trim().isEmpty() ? "Exemple" : text.trim(); invalidate(); }
     public void setBox(float x, float y, float w, float h) { this.x = x; this.y = y; this.w = w; this.h = h; invalidate(); }
+    public void setRotation(float rotation) { this.rotation = normalizeAngle(rotation); invalidate(); }
     public void setStyle(int textSize, int textColor, int opacity, boolean bold, boolean italic, String align, boolean shadow) {
         this.textSize = textSize; this.textColor = textColor; this.opacity = opacity; this.bold = bold; this.italic = italic;
         this.align = align == null ? "center" : align; this.shadow = shadow; invalidate();
@@ -51,6 +76,7 @@ public class PeekOverlayView extends View {
     public float getBoxY() { return y; }
     public float getBoxW() { return w; }
     public float getBoxH() { return h; }
+    public float getRotation() { return rotation; }
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -63,11 +89,27 @@ public class PeekOverlayView extends View {
             canvas.drawText("Choisis une image Peek", imageRect.centerX(), imageRect.centerY(), paint);
         }
         computeBoxRect();
+        canvas.save();
+        canvas.rotate(rotation, boxRect.centerX(), boxRect.centerY());
         drawPreviewText(canvas, boxRect, previewText);
+        if (selected) drawEditor(canvas);
+        canvas.restore();
+    }
+
+    private void drawEditor(Canvas canvas) {
+        canvas.drawRoundRect(boxRect, dp(8), dp(8), fillPaint);
         canvas.drawRoundRect(boxRect, dp(8), dp(8), boxPaint);
-        float r = dp(8);
-        canvas.drawCircle(boxRect.right, boxRect.bottom, r, handlePaint);
+        float r = dp(9);
         canvas.drawCircle(boxRect.left, boxRect.top, r, handlePaint);
+        canvas.drawCircle(boxRect.right, boxRect.top, r, handlePaint);
+        canvas.drawCircle(boxRect.left, boxRect.bottom, r, handlePaint);
+        canvas.drawCircle(boxRect.right, boxRect.bottom, r, handlePaint);
+        float cx = boxRect.centerX();
+        float cy = boxRect.top - dp(34);
+        canvas.drawLine(cx, boxRect.top, cx, cy, boxPaint);
+        canvas.drawCircle(cx, cy, dp(10), rotatePaint);
+        paint.reset(); paint.setAntiAlias(true); paint.setColor(Color.WHITE); paint.setTextSize(dp(11)); paint.setTextAlign(Paint.Align.CENTER); paint.setTypeface(Typeface.DEFAULT_BOLD);
+        canvas.drawText("↻", cx, cy + dp(4), paint);
     }
 
     private void computeImageRect() {
@@ -113,29 +155,92 @@ public class PeekOverlayView extends View {
         float ex = event.getX(), ey = event.getY();
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-                lastX = ex; lastY = ey;
-                float d = dp(28);
-                if (Math.abs(ex - boxRect.right) < d && Math.abs(ey - boxRect.bottom) < d) mode = 2;
-                else if (boxRect.contains(ex, ey)) mode = 1;
-                else { mode = 1; moveCenterTo(ex, ey); }
+                selected = true;
+                lastX = ex; lastY = ey; startTouchX = ex; startTouchY = ey;
+                startX = x; startY = y; startW = w; startH = h; startRotation = rotation;
+                mode = hitMode(ex, ey);
+                if (mode == MODE_NONE) {
+                    moveCenterTo(ex, ey);
+                    mode = MODE_MOVE;
+                    notifyChanged();
+                }
                 invalidate(); return true;
             case MotionEvent.ACTION_MOVE:
-                float dx = (ex - lastX) / Math.max(1f, imageRect.width());
-                float dy = (ey - lastY) / Math.max(1f, imageRect.height());
-                if (mode == 2) { w = clamp(w + dx, 0.08f, 1f - x); h = clamp(h + dy, 0.04f, 1f - y); }
-                else if (mode == 1) { x = clamp(x + dx, 0f, 1f - w); y = clamp(y + dy, 0f, 1f - h); }
-                lastX = ex; lastY = ey; invalidate(); return true;
+                if (mode == MODE_ROTATE) rotateTo(ex, ey);
+                else if (mode == MODE_MOVE) moveBy(ex - lastX, ey - lastY);
+                else if (mode != MODE_NONE) resizeFromStart(ex, ey);
+                lastX = ex; lastY = ey;
+                notifyChanged(); invalidate(); return true;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
-                mode = 0; return true;
+                if (Math.abs(ex - startTouchX) < dp(4) && Math.abs(ey - startTouchY) < dp(4) && mode == MODE_MOVE) {
+                    // Simple tap on the image: place and keep the text zone selected/fixed there.
+                    moveCenterTo(ex, ey);
+                    notifyChanged(); invalidate();
+                }
+                mode = MODE_NONE; return true;
         }
         return true;
+    }
+
+    private int hitMode(float px, float py) {
+        float[] local = toLocal(px, py);
+        float lx = local[0], ly = local[1];
+        float d = dp(30);
+        float rotateX = boxRect.centerX();
+        float rotateY = boxRect.top - dp(34);
+        if (distance(lx, ly, rotateX, rotateY) <= d) return MODE_ROTATE;
+        if (distance(lx, ly, boxRect.right, boxRect.bottom) <= d) return MODE_RESIZE_BR;
+        if (distance(lx, ly, boxRect.left, boxRect.bottom) <= d) return MODE_RESIZE_BL;
+        if (distance(lx, ly, boxRect.right, boxRect.top) <= d) return MODE_RESIZE_TR;
+        if (distance(lx, ly, boxRect.left, boxRect.top) <= d) return MODE_RESIZE_TL;
+        touchRect.set(boxRect); touchRect.inset(-dp(14), -dp(14));
+        if (touchRect.contains(lx, ly)) return MODE_MOVE;
+        return MODE_NONE;
+    }
+
+    private float[] toLocal(float px, float py) {
+        double a = Math.toRadians(-rotation);
+        float cx = boxRect.centerX();
+        float cy = boxRect.centerY();
+        float dx = px - cx;
+        float dy = py - cy;
+        return new float[]{(float)(dx * Math.cos(a) - dy * Math.sin(a) + cx), (float)(dx * Math.sin(a) + dy * Math.cos(a) + cy)};
+    }
+
+    private void moveBy(float dxPx, float dyPx) {
+        x = clamp(x + dxPx / Math.max(1f, imageRect.width()), 0f, 1f - w);
+        y = clamp(y + dyPx / Math.max(1f, imageRect.height()), 0f, 1f - h);
+    }
+
+    private void resizeFromStart(float px, float py) {
+        float[] local = toLocal(px, py);
+        float lx = local[0], ly = local[1];
+        float nx = startX, ny = startY, nw = startW, nh = startH;
+        float relX = (lx - imageRect.left) / Math.max(1f, imageRect.width());
+        float relY = (ly - imageRect.top) / Math.max(1f, imageRect.height());
+        if (mode == MODE_RESIZE_BR || mode == MODE_RESIZE_TR) nw = clamp(relX - startX, 0.08f, 1f - startX);
+        if (mode == MODE_RESIZE_BL || mode == MODE_RESIZE_TL) { nx = clamp(relX, 0f, startX + startW - 0.08f); nw = clamp(startX + startW - nx, 0.08f, 1f - nx); }
+        if (mode == MODE_RESIZE_BR || mode == MODE_RESIZE_BL) nh = clamp(relY - startY, 0.04f, 1f - startY);
+        if (mode == MODE_RESIZE_TR || mode == MODE_RESIZE_TL) { ny = clamp(relY, 0f, startY + startH - 0.04f); nh = clamp(startY + startH - ny, 0.04f, 1f - ny); }
+        x = nx; y = ny; w = nw; h = nh;
+    }
+
+    private void rotateTo(float px, float py) {
+        float cx = boxRect.centerX();
+        float cy = boxRect.centerY();
+        float startAngle = (float) Math.toDegrees(Math.atan2(startTouchY - cy, startTouchX - cx));
+        float currentAngle = (float) Math.toDegrees(Math.atan2(py - cy, px - cx));
+        rotation = normalizeAngle(startRotation + currentAngle - startAngle);
     }
 
     private void moveCenterTo(float px, float py) {
         x = clamp((px - imageRect.left) / Math.max(1f, imageRect.width()) - w / 2f, 0f, 1f - w);
         y = clamp((py - imageRect.top) / Math.max(1f, imageRect.height()) - h / 2f, 0f, 1f - h);
     }
+    private float distance(float x1, float y1, float x2, float y2) { float dx = x1 - x2; float dy = y1 - y2; return (float)Math.sqrt(dx * dx + dy * dy); }
+    private float normalizeAngle(float value) { while (value > 180f) value -= 360f; while (value < -180f) value += 360f; return value; }
     private float clamp(float v, float min, float max) { return Math.max(min, Math.min(max, v)); }
+    private void notifyChanged() { if (changeListener != null) changeListener.onPeekChanged(this); }
     private int dp(int value) { return (int) (value * getResources().getDisplayMetrics().density + 0.5f); }
 }

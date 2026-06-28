@@ -320,7 +320,10 @@ public final class MagicStandaloneClient {
                 Math.round((bx + bw) * outW),
                 Math.round((by + bh) * outH)
         );
+        canvas.save();
+        canvas.rotate(MagicPrefs.peekRotation(context), clip.exactCenterX(), clip.exactCenterY());
         drawPeekText(canvas, clip, text == null || text.trim().isEmpty() ? "Exemple" : text.trim(), context);
+        canvas.restore();
         return out;
     }
 

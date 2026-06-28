@@ -31,6 +31,7 @@ public final class MagicPrefs {
     public static float peekY(Context context) { return prefs(context).getFloat("peekY", 0.70f); }
     public static float peekW(Context context) { return prefs(context).getFloat("peekW", 0.76f); }
     public static float peekH(Context context) { return prefs(context).getFloat("peekH", 0.14f); }
+    public static float peekRotation(Context context) { return prefs(context).getFloat("peekRotation", 0f); }
     public static int peekTextSize(Context context) { return prefs(context).getInt("peekTextSize", 46); }
     public static int peekTextColor(Context context) { return prefs(context).getInt("peekTextColor", 0xFFFFFFFF); }
     public static int peekOpacity(Context context) { return prefs(context).getInt("peekOpacity", 100); }
@@ -62,12 +63,13 @@ public final class MagicPrefs {
         prefs(context).edit().putString("peekImageUri", uri == null ? "" : uri).apply();
     }
 
-    public static void savePeekBox(Context context, float x, float y, float w, float h) {
+    public static void savePeekBox(Context context, float x, float y, float w, float h, float rotation) {
         prefs(context).edit()
                 .putFloat("peekX", clamp(x, 0f, 0.98f))
                 .putFloat("peekY", clamp(y, 0f, 0.98f))
                 .putFloat("peekW", clamp(w, 0.08f, 1f))
                 .putFloat("peekH", clamp(h, 0.04f, 1f))
+                .putFloat("peekRotation", normalizeAngle(rotation))
                 .apply();
     }
 
@@ -98,5 +100,11 @@ public final class MagicPrefs {
 
     private static float clamp(float v, float min, float max) {
         return Math.max(min, Math.min(max, v));
+    }
+
+    private static float normalizeAngle(float value) {
+        while (value > 180f) value -= 360f;
+        while (value < -180f) value += 360f;
+        return value;
     }
 }

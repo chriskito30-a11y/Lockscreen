@@ -14,6 +14,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -131,7 +133,7 @@ public class MainActivity extends Activity {
 
         LinearLayout peekCard = cardLayout();
         peekCard.addView(sectionTitle("Peek"));
-        peekCard.addView(smallInfo("Choisis une image locale, puis déplace/redimensionne le cadre avec le doigt. Le point violet en bas à droite sert à agrandir ou réduire la zone."));
+        peekCard.addView(smallInfo("Choisis une image locale. Tape sur l’image pour placer la zone. Déplace le cadre avec 1 doigt, tire un coin violet pour agrandir/réduire, tire le rond cyan ↻ pour orienter. Les changements de style s’affichent en direct."));
         Button choosePeekButton = secondaryButton("Choisir une image Peek"); peekCard.addView(choosePeekButton);
         peekImageText = smallInfo("Image Peek : " + (MagicPrefs.peekImageUri(this).isEmpty() ? "aucune" : "sélectionnée")); peekCard.addView(peekImageText);
 
@@ -153,7 +155,7 @@ public class MainActivity extends Activity {
         alignAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item); peekAlignSpinner.setAdapter(alignAdapter); peekAlignSpinner.setSelection(alignIndex(MagicPrefs.peekAlign(this)));
         peekCard.addView(peekAlignSpinner);
 
-        Button previewPeekButton = secondaryButton("Prévisualiser le Peek"); peekCard.addView(previewPeekButton);
+        Button previewPeekButton = secondaryButton("Rafraîchir avec la valeur Inject"); peekCard.addView(previewPeekButton);
         root.addView(peekCard);
 
         LinearLayout actionCard = cardLayout();
@@ -179,6 +181,7 @@ public class MainActivity extends Activity {
         scanButton.setOnClickListener(v -> { status("Scan en cours..."); new Thread(() -> { try { List<ScanCandidate> found = MagicStandaloneClient.scanSource(sourceEdit.getText().toString()); runOnUiThread(() -> applyScanResults(found)); status("Scan terminé : " + found.size() + " donnée(s) trouvée(s)."); } catch (Exception e) { status("Erreur scan : " + safeMessage(e)); } }).start(); });
         choosePeekButton.setOnClickListener(v -> pickPeekImage());
         previewPeekButton.setOnClickListener(v -> { saveConfig(); refreshPeekPreviewFromValue(); });
+        installPeekLivePreview();
         saveButton.setOnClickListener(v -> { saveConfig(); status("Configuration sauvegardée."); });
         testValueButton.setOnClickListener(v -> { saveConfig(); status("Lecture Inject..."); new Thread(() -> { try { MagicResult result = MagicStandaloneClient.fetchValue(this); status("Valeur détectée : " + result.value); runOnUiThread(() -> { if (peekPreview != null) peekPreview.setPreviewText(result.value); }); } catch (Exception e) { status("Erreur valeur : " + safeMessage(e)); } }).start(); });
         applyButton.setOnClickListener(v -> { saveConfig(); status("Application du lockscreen..."); new Thread(() -> { try { MagicResult result = MagicStandaloneClient.updateLockscreen(this); MagicPrefs.setLastHash(this, result.hash); status("Lockscreen mis à jour : " + result.value + " / " + result.title); } catch (Exception e) { status("Erreur photo : " + safeMessage(e)); } }).start(); });
@@ -186,6 +189,37 @@ public class MainActivity extends Activity {
         stopButton.setOnClickListener(v -> { MagicListenService.stop(this); status("Écoute stoppée."); });
 
         scroll.addView(root); setContentView(scroll);
+    }
+
+    private void installPeekLivePreview() {
+        if (peekPreview != null) {
+            peekPreview.setChangeListener(view -> MagicPrefs.savePeekBox(this, view.getBoxX(), view.getBoxY(), view.getBoxW(), view.getBoxH(), view.getRotation()));
+        }
+        TextWatcher watcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { savePeekStyleOnly(); applyPeekStyleToPreview(); }
+            @Override public void afterTextChanged(Editable s) {}
+        };
+        peekSizeEdit.addTextChangedListener(watcher);
+        peekColorEdit.addTextChangedListener(watcher);
+        peekOpacityEdit.addTextChangedListener(watcher);
+        peekBoldCheck.setOnCheckedChangeListener((buttonView, isChecked) -> { savePeekStyleOnly(); applyPeekStyleToPreview(); });
+        peekItalicCheck.setOnCheckedChangeListener((buttonView, isChecked) -> { savePeekStyleOnly(); applyPeekStyleToPreview(); });
+        peekShadowCheck.setOnCheckedChangeListener((buttonView, isChecked) -> { savePeekStyleOnly(); applyPeekStyleToPreview(); });
+        peekAlignSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) { savePeekStyleOnly(); applyPeekStyleToPreview(); }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
+    }
+
+    private void savePeekStyleOnly() {
+        if (peekSizeEdit == null || peekColorEdit == null || peekOpacityEdit == null) return;
+        MagicPrefs.savePeekStyle(this, parseInt(peekSizeEdit.getText().toString(), 46), parseColor(peekColorEdit.getText().toString(), Color.WHITE), parseInt(peekOpacityEdit.getText().toString(), 100), peekBoldCheck.isChecked(), peekItalicCheck.isChecked(), selectedAlign(), peekShadowCheck.isChecked());
+    }
+
+    private void applyPeekStyleToPreview() {
+        if (peekPreview == null || peekSizeEdit == null) return;
+        peekPreview.setStyle(parseInt(peekSizeEdit.getText().toString(), MagicPrefs.peekTextSize(this)), parseColor(peekColorEdit.getText().toString(), MagicPrefs.peekTextColor(this)), parseInt(peekOpacityEdit.getText().toString(), MagicPrefs.peekOpacity(this)), peekBoldCheck.isChecked(), peekItalicCheck.isChecked(), selectedAlign(), peekShadowCheck.isChecked());
     }
 
     private void pickPeekImage() {
@@ -204,6 +238,7 @@ public class MainActivity extends Activity {
             MagicPrefs.savePeekImageUri(this, uri.toString());
             if (peekImageText != null) peekImageText.setText("Image Peek : sélectionnée");
             refreshPeekPreview();
+            refreshPeekPreviewFromValue();
             status("Image Peek sélectionnée.");
         }
     }
@@ -220,7 +255,8 @@ public class MainActivity extends Activity {
     private void refreshPeekPreview() {
         if (peekPreview == null) return;
         peekPreview.setBox(MagicPrefs.peekX(this), MagicPrefs.peekY(this), MagicPrefs.peekW(this), MagicPrefs.peekH(this));
-        peekPreview.setStyle(MagicPrefs.peekTextSize(this), MagicPrefs.peekTextColor(this), MagicPrefs.peekOpacity(this), MagicPrefs.peekBold(this), MagicPrefs.peekItalic(this), MagicPrefs.peekAlign(this), MagicPrefs.peekShadow(this));
+        peekPreview.setRotation(MagicPrefs.peekRotation(this));
+        applyPeekStyleToPreview();
         String uri = MagicPrefs.peekImageUri(this);
         if (uri == null || uri.isEmpty()) { peekPreview.setImage(null); return; }
         try (InputStream input = getContentResolver().openInputStream(Uri.parse(uri))) {
@@ -257,9 +293,9 @@ public class MainActivity extends Activity {
     private void saveConfig() {
         int interval = parseInt(intervalEdit.getText().toString(), 3); int duration = parseInt(durationEdit.getText().toString(), 10);
         MagicPrefs.saveConfig(this, sourceEdit.getText().toString(), pathEdit.getText().toString(), langEdit.getText().toString(), selectedProvider(), interval, duration);
-        if (peekPreview != null) MagicPrefs.savePeekBox(this, peekPreview.getBoxX(), peekPreview.getBoxY(), peekPreview.getBoxW(), peekPreview.getBoxH());
-        MagicPrefs.savePeekStyle(this, parseInt(peekSizeEdit.getText().toString(), 46), parseColor(peekColorEdit.getText().toString(), Color.WHITE), parseInt(peekOpacityEdit.getText().toString(), 100), peekBoldCheck.isChecked(), peekItalicCheck.isChecked(), selectedAlign(), peekShadowCheck.isChecked());
-        refreshPeekPreview();
+        if (peekPreview != null) MagicPrefs.savePeekBox(this, peekPreview.getBoxX(), peekPreview.getBoxY(), peekPreview.getBoxW(), peekPreview.getBoxH(), peekPreview.getRotation());
+        savePeekStyleOnly();
+        applyPeekStyleToPreview();
     }
 
     private int parseInt(String value, int fallback) { try { return Integer.parseInt(value.trim()); } catch (Exception e) { return fallback; } }
