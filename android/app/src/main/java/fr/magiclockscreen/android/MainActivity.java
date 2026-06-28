@@ -44,6 +44,12 @@ public class MainActivity extends Activity {
     private EditText peekSizeEdit;
     private EditText peekColorEdit;
     private EditText peekOpacityEdit;
+    private EditText peekXEdit;
+    private EditText peekYEdit;
+    private EditText peekWEdit;
+    private EditText peekHEdit;
+    private EditText peekRotationEdit;
+    private boolean syncingPeekFineControls = false;
     private CheckBox peekBoldCheck;
     private CheckBox peekItalicCheck;
     private CheckBox peekShadowCheck;
@@ -141,6 +147,18 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(420)); previewParams.setMargins(0, dp(12), 0, dp(8));
         peekCard.addView(peekPreview, previewParams);
 
+        peekCard.addView(label("Réglages fins de la zone"));
+        peekCard.addView(smallInfo("Ces valeurs se mettent à jour quand tu bouges le cadre. Tu peux aussi les modifier à la main pour être plus précis. X/Y/largeur/hauteur sont en % de l’image. Inclinaison en degrés."));
+        LinearLayout row1 = rowLayout();
+        peekXEdit = input("X %", trimFloat(MagicPrefs.peekX(this))); row1.addView(fieldBox("X", peekXEdit));
+        peekYEdit = input("Y %", trimFloat(MagicPrefs.peekY(this))); row1.addView(fieldBox("Y", peekYEdit));
+        peekCard.addView(row1);
+        LinearLayout row2 = rowLayout();
+        peekWEdit = input("Largeur %", trimFloat(MagicPrefs.peekW(this))); row2.addView(fieldBox("Largeur", peekWEdit));
+        peekHEdit = input("Hauteur %", trimFloat(MagicPrefs.peekH(this))); row2.addView(fieldBox("Hauteur", peekHEdit));
+        peekCard.addView(row2);
+        peekCard.addView(label("Inclinaison en degrés")); peekRotationEdit = input("0", trimFloat(MagicPrefs.peekRotation(this))); peekCard.addView(peekRotationEdit);
+
         peekCard.addView(label("Taille du texte")); peekSizeEdit = input("46", String.valueOf(MagicPrefs.peekTextSize(this))); peekCard.addView(peekSizeEdit);
         peekCard.addView(label("Couleur du texte (#FFFFFF)")); peekColorEdit = input("#FFFFFF", colorToHex(MagicPrefs.peekTextColor(this))); peekCard.addView(peekColorEdit);
         peekCard.addView(label("Opacité du texte de 0 à 100")); peekOpacityEdit = input("100", String.valueOf(MagicPrefs.peekOpacity(this))); peekCard.addView(peekOpacityEdit);
@@ -193,8 +211,22 @@ public class MainActivity extends Activity {
 
     private void installPeekLivePreview() {
         if (peekPreview != null) {
-            peekPreview.setChangeListener(view -> MagicPrefs.savePeekBox(this, view.getBoxX(), view.getBoxY(), view.getBoxW(), view.getBoxH(), view.getRotation()));
+            peekPreview.setChangeListener(view -> {
+                MagicPrefs.savePeekBox(this, view.getBoxX(), view.getBoxY(), view.getBoxW(), view.getBoxH(), view.getRotation());
+                syncPeekFineControlsFromPreview();
+            });
         }
+        TextWatcher fineWatcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { applyPeekFineControlsToPreview(); }
+            @Override public void afterTextChanged(Editable s) {}
+        };
+        peekXEdit.addTextChangedListener(fineWatcher);
+        peekYEdit.addTextChangedListener(fineWatcher);
+        peekWEdit.addTextChangedListener(fineWatcher);
+        peekHEdit.addTextChangedListener(fineWatcher);
+        peekRotationEdit.addTextChangedListener(fineWatcher);
+
         TextWatcher watcher = new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) { savePeekStyleOnly(); applyPeekStyleToPreview(); }
@@ -210,6 +242,29 @@ public class MainActivity extends Activity {
             @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) { savePeekStyleOnly(); applyPeekStyleToPreview(); }
             @Override public void onNothingSelected(AdapterView<?> parent) {}
         });
+    }
+
+    private void syncPeekFineControlsFromPreview() {
+        if (syncingPeekFineControls || peekPreview == null || peekXEdit == null) return;
+        syncingPeekFineControls = true;
+        peekXEdit.setText(trimFloat(peekPreview.getBoxX()));
+        peekYEdit.setText(trimFloat(peekPreview.getBoxY()));
+        peekWEdit.setText(trimFloat(peekPreview.getBoxW()));
+        peekHEdit.setText(trimFloat(peekPreview.getBoxH()));
+        peekRotationEdit.setText(trimFloat(peekPreview.getRotation()));
+        syncingPeekFineControls = false;
+    }
+
+    private void applyPeekFineControlsToPreview() {
+        if (syncingPeekFineControls || peekPreview == null || peekXEdit == null) return;
+        float x = clamp(parseFloat(peekXEdit.getText().toString(), peekPreview.getBoxX()), 0f, 100f);
+        float y = clamp(parseFloat(peekYEdit.getText().toString(), peekPreview.getBoxY()), 0f, 100f);
+        float w = clamp(parseFloat(peekWEdit.getText().toString(), peekPreview.getBoxW()), 5f, 100f);
+        float h = clamp(parseFloat(peekHEdit.getText().toString(), peekPreview.getBoxH()), 5f, 100f);
+        float rotation = parseFloat(peekRotationEdit.getText().toString(), peekPreview.getRotation());
+        peekPreview.setBox(x, y, w, h);
+        peekPreview.setRotation(rotation);
+        MagicPrefs.savePeekBox(this, x, y, w, h, rotation);
     }
 
     private void savePeekStyleOnly() {
@@ -256,6 +311,7 @@ public class MainActivity extends Activity {
         if (peekPreview == null) return;
         peekPreview.setBox(MagicPrefs.peekX(this), MagicPrefs.peekY(this), MagicPrefs.peekW(this), MagicPrefs.peekH(this));
         peekPreview.setRotation(MagicPrefs.peekRotation(this));
+        syncPeekFineControlsFromPreview();
         applyPeekStyleToPreview();
         String uri = MagicPrefs.peekImageUri(this);
         if (uri == null || uri.isEmpty()) { peekPreview.setImage(null); return; }
@@ -274,6 +330,8 @@ public class MainActivity extends Activity {
 
     private List<String> labels(List<ScanCandidate> found) { List<String> out = new ArrayList<>(); for (ScanCandidate c : found) out.add(c.toString()); return out; }
     private LinearLayout cardLayout() { LinearLayout cardView = new LinearLayout(this); cardView.setOrientation(LinearLayout.VERTICAL); cardView.setPadding(dp(18), dp(18), dp(18), dp(18)); GradientDrawable bg = new GradientDrawable(); bg.setColor(card); bg.setCornerRadius(dp(24)); bg.setStroke(dp(1), Color.argb(95, 148, 163, 184)); cardView.setBackground(bg); LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT); params.setMargins(0, dp(12), 0, dp(12)); cardView.setLayoutParams(params); return cardView; }
+    private LinearLayout rowLayout() { LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setPadding(0, dp(4), 0, dp(4)); return row; }
+    private LinearLayout fieldBox(String title, EditText edit) { LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); TextView t = label(title); t.setPadding(0, 0, 0, dp(4)); box.addView(t); box.addView(edit); LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f); params.setMargins(dp(4), 0, dp(4), 0); box.setLayoutParams(params); return box; }
     private TextView sectionTitle(String text) { TextView t = new TextView(this); t.setText(text); t.setTextColor(Color.WHITE); t.setTextSize(21f); t.setTypeface(Typeface.DEFAULT_BOLD); t.setPadding(0, 0, 0, dp(10)); return t; }
     private TextView smallInfo(String text) { TextView t = new TextView(this); t.setText(text); t.setTextSize(13f); t.setTextColor(Color.rgb(186, 230, 253)); t.setPadding(0, dp(8), 0, dp(4)); return t; }
     private EditText input(String hint, String value) { EditText input = new EditText(this); input.setHint(hint); input.setText(value == null ? "" : value); input.setTextSize(15f); input.setTextColor(Color.WHITE); input.setHintTextColor(Color.rgb(148, 163, 184)); input.setSingleLine(false); input.setMinLines(1); input.setPadding(dp(14), dp(10), dp(14), dp(10)); input.setBackground(inputBg()); return input; }
@@ -293,12 +351,16 @@ public class MainActivity extends Activity {
     private void saveConfig() {
         int interval = parseInt(intervalEdit.getText().toString(), 3); int duration = parseInt(durationEdit.getText().toString(), 10);
         MagicPrefs.saveConfig(this, sourceEdit.getText().toString(), pathEdit.getText().toString(), langEdit.getText().toString(), selectedProvider(), interval, duration);
+        applyPeekFineControlsToPreview();
         if (peekPreview != null) MagicPrefs.savePeekBox(this, peekPreview.getBoxX(), peekPreview.getBoxY(), peekPreview.getBoxW(), peekPreview.getBoxH(), peekPreview.getRotation());
         savePeekStyleOnly();
         applyPeekStyleToPreview();
     }
 
     private int parseInt(String value, int fallback) { try { return Integer.parseInt(value.trim()); } catch (Exception e) { return fallback; } }
+    private float parseFloat(String value, float fallback) { try { return Float.parseFloat(value.trim().replace(",", ".")); } catch (Exception e) { return fallback; } }
+    private float clamp(float value, float min, float max) { return Math.max(min, Math.min(max, value)); }
+    private String trimFloat(float value) { return Math.abs(value - Math.round(value)) < 0.05f ? String.valueOf(Math.round(value)) : String.format(java.util.Locale.US, "%.1f", value); }
     private int parseColor(String value, int fallback) { try { return Color.parseColor(value.trim()); } catch (Exception e) { return fallback; } }
     private String colorToHex(int color) { return String.format("#%06X", (0xFFFFFF & color)); }
     private String safeMessage(Exception e) { String msg = e.getMessage(); return msg == null || msg.isEmpty() ? e.getClass().getSimpleName() : msg; }
