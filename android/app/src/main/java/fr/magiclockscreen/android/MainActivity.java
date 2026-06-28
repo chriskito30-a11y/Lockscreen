@@ -64,7 +64,8 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(28), dp(20), dp(28));
+        root.setPadding(dp(20), dp(28), dp(20), dp(120));
+        scroll.setClipToPadding(false);
 
         TextView logo = new TextView(this);
         logo.setText("✦");
@@ -164,6 +165,9 @@ public class MainActivity extends Activity {
         footer.setTextColor(Color.rgb(148, 163, 184));
         footer.setGravity(Gravity.CENTER_HORIZONTAL);
         footer.setPadding(0, dp(22), 0, 0);
+        footer.setClickable(true);
+        footer.setPaintFlags(footer.getPaintFlags() | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
+        footer.setOnClickListener(v -> startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://modulys.top"))));
         root.addView(footer);
 
         scanSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
