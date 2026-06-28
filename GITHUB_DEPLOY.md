@@ -1,71 +1,26 @@
-# Déploiement GitHub + Vercel + APK
+# Déploiement GitHub Actions — Modulys Magic Lock
 
-## 1. Mettre sur GitHub
+Cette version est 100 % Android autonome : pas de Vercel, pas de backend, pas d'API Google.
 
-Mets le contenu complet du dossier `magic-lockscreen-android/` dans un dépôt GitHub :
+## Relancer la génération APK
 
-```txt
-magic-lockscreen-android/
-├── .github/workflows/android-debug-apk.yml
-├── web/
-├── android/
-├── README.md
-└── GITHUB_DEPLOY.md
+Depuis Termux, à la racine du dépôt :
+
+```bash
+git status
+git add .
+git commit -m "Add Peek mode and remove Google images"
+git push
 ```
 
-Important : il faut envoyer le contenu du dossier, pas le ZIP tel quel.
+GitHub Actions relance ensuite le workflow `Build Modulys Magic Lock APK`.
 
-## 2. Déployer le backend sur Vercel
+## Artefact attendu
 
-Dans Vercel :
+Dans l'onglet Actions du dépôt, télécharger :
 
-- importer le dépôt GitHub ;
-- sélectionner le framework Next.js ;
-- définir le Root Directory sur `web` ;
-- ajouter la variable d’environnement :
-
-```txt
-MAGIC_CONFIG_SECRET=une-cle-longue-et-privee-a-changer
+```text
+Modulys-Magic-Lock-v3.apk
 ```
 
-Puis déployer.
-
-## 3. Générer l’APK Android avec GitHub Actions
-
-Dans GitHub :
-
-1. Va dans l’onglet `Actions`.
-2. Choisis `Build Android Debug APK`.
-3. Clique `Run workflow`.
-4. Attends la fin du build.
-5. Ouvre le build terminé.
-6. Télécharge l’artefact `Magic-Lockscreen-Android-debug-apk`.
-7. Dans le ZIP téléchargé, récupère `app-debug.apk`.
-8. Installe cet APK sur ton téléphone Android.
-
-## 4. Configurer l’app Android
-
-Dans l’app Android :
-
-```txt
-Backend base URL : https://ton-projet.vercel.app
-Token : le token généré par le dashboard web
-Intervalle : 2 secondes
-Durée : 10 minutes
-```
-
-Appuie d’abord sur `Tester maintenant`, puis sur `Activer l’écoute`.
-
-## 5. Test sans Inject
-
-Dans le dashboard web, teste avec :
-
-```txt
-https://ton-projet.vercel.app/api/mock?selection=Tom%20Cruise
-```
-
-Clé JSON :
-
-```txt
-selection
-```
+La signature stable est conservée avec `android/modulys-magic-lock.keystore`, donc l'APK peut mettre à jour une installation précédente sans désinstallation.

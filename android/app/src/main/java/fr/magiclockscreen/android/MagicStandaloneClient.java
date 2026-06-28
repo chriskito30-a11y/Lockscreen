@@ -4,6 +4,12 @@ import android.app.WallpaperManager;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.Typeface;
+import android.net.Uri;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -250,39 +256,6 @@ public final class MagicStandaloneClient {
         return new MagicResult(query, sha(query), image, title.isEmpty() ? query : title);
     }
 
-    private static MagicResult findGoogleImage(Context context, String query) throws Exception {
-        String apiKey = MagicPrefs.googleApiKey(context);
-        String cx = MagicPrefs.googleCx(context);
-
-        if (apiKey == null || apiKey.trim().isEmpty() || cx == null || cx.trim().isEmpty()) {
-            throw new IllegalStateException("Google Images demande une clé API Google et un CX Programmable Search.");
-        }
-
-        String api = "https://www.googleapis.com/customsearch/v1"
-                + "?key=" + enc(apiKey.trim())
-                + "&cx=" + enc(cx.trim())
-                + "&q=" + enc(query)
-                + "&searchType=image"
-                + "&num=1"
-                + "&safe=off"
-                + "&imgSize=large";
-
-        String json = getText(api);
-        try {
-            JSONObject root = new JSONObject(json);
-            JSONArray items = root.optJSONArray("items");
-            if (items == null || items.length() == 0) return new MagicResult(query, sha(query), "", query);
-            JSONObject item = items.getJSONObject(0);
-            String title = item.optString("title", query);
-            String link = item.optString("link", "");
-            return new MagicResult(query, sha(query), link, title.isEmpty() ? query : title);
-        } catch (Exception e) {
-            String image = extractDirectKey(json, "link");
-            String title = extractDirectKey(json, "title");
-            return new MagicResult(query, sha(query), image, title.isEmpty() ? query : title);
-        }
-    }
-
     private static Bitmap tryDownloadBitmap(String imageUrl) {
         try {
             if (imageUrl == null || imageUrl.trim().isEmpty()) return null;
@@ -297,39 +270,108 @@ public final class MagicStandaloneClient {
     public static MagicResult updateLockscreen(Context context) throws Exception {
         MagicResult value = fetchValue(context);
         String provider = MagicPrefs.imageProvider(context);
-        if (provider == null || provider.trim().isEmpty()) provider = "auto";
+        if (provider == null || provider.trim().isEmpty()) provider = "wikipedia";
         provider = provider.toLowerCase(Locale.US);
 
-        List<String> order = new ArrayList<>();
-        if ("google".equals(provider)) {
-            order.add("google");
-        } else if ("wikipedia".equals(provider)) {
-            order.add("wikipedia");
-        } else {
-            // Auto : Google si configuré, puis Wikipédia.
-            if (!MagicPrefs.googleApiKey(context).isEmpty() && !MagicPrefs.googleCx(context).isEmpty()) order.add("google");
-            order.add("wikipedia");
+        if ("peek".equals(provider)) {
+            Bitmap bitmap = renderPeekBitmap(context, value.value);
+            WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, WallpaperManager.FLAG_LOCK);
+            return new MagicResult(value.value, value.hash, MagicPrefs.peekImageUri(context), "Peek");
         }
 
-        String lastError = "";
-        for (String current : order) {
-            try {
-                MagicResult imageResult = "google".equals(current)
-                        ? findGoogleImage(context, value.value)
-                        : findWikipediaImage(context, value.value);
-
-                Bitmap bitmap = tryDownloadBitmap(imageResult.imageUrl);
-                if (bitmap != null) {
-                    WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, WallpaperManager.FLAG_LOCK);
-                    return new MagicResult(value.value, value.hash, imageResult.imageUrl, imageResult.title);
-                }
-                lastError = "Image introuvable ou illisible via " + current;
-            } catch (Exception e) {
-                lastError = e.getMessage() == null ? current : e.getMessage();
-                if ("google".equals(provider)) throw e;
-            }
+        MagicResult imageResult = findWikipediaImage(context, value.value);
+        Bitmap bitmap = tryDownloadBitmap(imageResult.imageUrl);
+        if (bitmap != null) {
+            WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, WallpaperManager.FLAG_LOCK);
+            return new MagicResult(value.value, value.hash, imageResult.imageUrl, imageResult.title);
         }
-
-        throw new IllegalStateException(lastError.isEmpty() ? "Aucune photo trouvée pour : " + value.value : lastError);
+        throw new IllegalStateException("Aucune photo Wikipédia trouvée pour : " + value.value);
     }
+
+    public static Bitmap renderPeekBitmap(Context context, String text) throws Exception {
+        String uriText = MagicPrefs.peekImageUri(context);
+        if (uriText == null || uriText.trim().isEmpty()) {
+            throw new IllegalStateException("Aucune image Peek choisie");
+        }
+
+        Bitmap base;
+        try (InputStream input = context.getContentResolver().openInputStream(Uri.parse(uriText))) {
+            base = BitmapFactory.decodeStream(input);
+        }
+        if (base == null) throw new IllegalStateException("Image Peek illisible");
+
+        int outW = Math.max(720, base.getWidth());
+        int outH = Math.max(1280, base.getHeight());
+        Bitmap out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+
+        Rect src = new Rect(0, 0, base.getWidth(), base.getHeight());
+        Rect dst = coverRect(base.getWidth(), base.getHeight(), outW, outH);
+        Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
+        canvas.drawBitmap(base, src, dst, bitmapPaint);
+
+        float bx = MagicPrefs.peekX(context);
+        float by = MagicPrefs.peekY(context);
+        float bw = MagicPrefs.peekW(context);
+        float bh = MagicPrefs.peekH(context);
+        Rect clip = new Rect(
+                Math.round((bx) * outW),
+                Math.round((by) * outH),
+                Math.round((bx + bw) * outW),
+                Math.round((by + bh) * outH)
+        );
+        drawPeekText(canvas, clip, text == null || text.trim().isEmpty() ? "Exemple" : text.trim(), context);
+        return out;
+    }
+
+    private static Rect coverRect(int imgW, int imgH, int outW, int outH) {
+        float imgRatio = imgW / (float) imgH;
+        float outRatio = outW / (float) outH;
+        if (imgRatio > outRatio) {
+            int h = outH;
+            int w = Math.round(h * imgRatio);
+            int left = (outW - w) / 2;
+            return new Rect(left, 0, left + w, outH);
+        } else {
+            int w = outW;
+            int h = Math.round(w / imgRatio);
+            int top = (outH - h) / 2;
+            return new Rect(0, top, outW, top + h);
+        }
+    }
+
+    private static void drawPeekText(Canvas canvas, Rect rect, String text, Context context) {
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+        int opacity = Math.max(0, Math.min(100, MagicPrefs.peekOpacity(context)));
+        int alpha = Math.round(opacity * 2.55f);
+        int color = MagicPrefs.peekTextColor(context);
+        paint.setColor((color & 0x00FFFFFF) | (alpha << 24));
+        paint.setTextSize(spToPx(context, MagicPrefs.peekTextSize(context)));
+        boolean bold = MagicPrefs.peekBold(context);
+        boolean italic = MagicPrefs.peekItalic(context);
+        int style = bold && italic ? Typeface.BOLD_ITALIC : bold ? Typeface.BOLD : italic ? Typeface.ITALIC : Typeface.NORMAL;
+        paint.setTypeface(Typeface.create(Typeface.DEFAULT, style));
+        String align = MagicPrefs.peekAlign(context);
+        if ("left".equalsIgnoreCase(align)) paint.setTextAlign(Paint.Align.LEFT);
+        else if ("right".equalsIgnoreCase(align)) paint.setTextAlign(Paint.Align.RIGHT);
+        else paint.setTextAlign(Paint.Align.CENTER);
+        if (MagicPrefs.peekShadow(context)) paint.setShadowLayer(dpToPx(context, 4), dpToPx(context, 2), dpToPx(context, 2), Color.argb(alpha, 0, 0, 0));
+
+        Paint.FontMetrics fm = paint.getFontMetrics();
+        float tx = paint.getTextAlign() == Paint.Align.LEFT ? rect.left + dpToPx(context, 10) : paint.getTextAlign() == Paint.Align.RIGHT ? rect.right - dpToPx(context, 10) : rect.centerX();
+        float ty = rect.centerY() - (fm.ascent + fm.descent) / 2f;
+        canvas.save();
+        canvas.clipRect(rect);
+        canvas.drawText(text, tx, ty, paint);
+        canvas.restore();
+    }
+
+    private static float spToPx(Context context, int sp) {
+        return sp * context.getResources().getDisplayMetrics().scaledDensity;
+    }
+
+    private static float dpToPx(Context context, int dp) {
+        return dp * context.getResources().getDisplayMetrics().density;
+    }
+
 }
