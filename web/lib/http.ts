@@ -20,13 +20,8 @@ export function textResponse(data: string, init?: ResponseInit): Response {
   });
 }
 
-export function pngResponse(buffer: Buffer, init?: ResponseInit): Response {
-  const body = buffer.buffer.slice(
-    buffer.byteOffset,
-    buffer.byteOffset + buffer.byteLength
-  ) as ArrayBuffer;
-
-  return new Response(body, {
+export function pngResponse(bytes: Uint8Array, init?: ResponseInit): Response {
+  return new Response(bytes as BodyInit, {
     ...init,
     headers: {
       'content-type': 'image/png',
