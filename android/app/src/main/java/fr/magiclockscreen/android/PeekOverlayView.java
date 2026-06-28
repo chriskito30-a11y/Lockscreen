@@ -10,6 +10,7 @@ import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewParent;
 
 public class PeekOverlayView extends View {
     public interface ChangeListener { void onPeekChanged(PeekOverlayView view); }
@@ -151,6 +152,13 @@ public class PeekOverlayView extends View {
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
+        // Pendant l’édition Peek, le ScrollView parent ne doit pas intercepter
+        // les gestes, sinon déplacer/redimensionner la zone fait scroller toute l’app.
+        boolean editingGesture = event.getActionMasked() == MotionEvent.ACTION_DOWN
+                || event.getActionMasked() == MotionEvent.ACTION_MOVE
+                || event.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN
+                || event.getActionMasked() == MotionEvent.ACTION_POINTER_UP;
+        requestParentScrollLock(editingGesture);
         computeImageRect(); computeBoxRect();
         float ex = event.getX(), ey = event.getY();
         switch (event.getActionMasked()) {
@@ -173,6 +181,7 @@ public class PeekOverlayView extends View {
                 notifyChanged(); invalidate(); return true;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
+                requestParentScrollLock(false);
                 if (Math.abs(ex - startTouchX) < dp(4) && Math.abs(ey - startTouchY) < dp(4) && mode == MODE_MOVE) {
                     // Simple tap on the image: place and keep the text zone selected/fixed there.
                     moveCenterTo(ex, ey);
@@ -242,5 +251,12 @@ public class PeekOverlayView extends View {
     private float normalizeAngle(float value) { while (value > 180f) value -= 360f; while (value < -180f) value += 360f; return value; }
     private float clamp(float v, float min, float max) { return Math.max(min, Math.min(max, v)); }
     private void notifyChanged() { if (changeListener != null) changeListener.onPeekChanged(this); }
+    private void requestParentScrollLock(boolean lock) {
+        ViewParent parent = getParent();
+        while (parent != null) {
+            parent.requestDisallowInterceptTouchEvent(lock);
+            parent = parent.getParent();
+        }
+    }
     private int dp(int value) { return (int) (value * getResources().getDisplayMetrics().density + 0.5f); }
 }
