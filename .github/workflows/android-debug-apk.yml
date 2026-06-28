@@ -26,14 +26,26 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          yes | sdkmanager --licenses
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
 
+      - name: Show Android project files
+        working-directory: android
+        run: |
+          pwd
+          ls -la
+          find app/src/main -maxdepth 4 -type f | sort
+
       - name: Build debug APK
         working-directory: android
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon --stacktrace --warning-mode all :app:assembleDebug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
