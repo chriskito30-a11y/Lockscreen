@@ -150,12 +150,12 @@ public class MainActivity extends Activity {
         peekCard.addView(label("Réglages fins de la zone"));
         peekCard.addView(smallInfo("Ces valeurs se mettent à jour quand tu bouges le cadre. Tu peux aussi les modifier à la main pour être plus précis. X/Y/largeur/hauteur sont en % de l’image. Inclinaison en degrés."));
         LinearLayout row1 = rowLayout();
-        peekXEdit = input("X %", trimFloat(MagicPrefs.peekX(this))); row1.addView(fieldBox("X", peekXEdit));
-        peekYEdit = input("Y %", trimFloat(MagicPrefs.peekY(this))); row1.addView(fieldBox("Y", peekYEdit));
+        peekXEdit = input("X %", percentText(MagicPrefs.peekX(this))); row1.addView(fieldBox("X", peekXEdit));
+        peekYEdit = input("Y %", percentText(MagicPrefs.peekY(this))); row1.addView(fieldBox("Y", peekYEdit));
         peekCard.addView(row1);
         LinearLayout row2 = rowLayout();
-        peekWEdit = input("Largeur %", trimFloat(MagicPrefs.peekW(this))); row2.addView(fieldBox("Largeur", peekWEdit));
-        peekHEdit = input("Hauteur %", trimFloat(MagicPrefs.peekH(this))); row2.addView(fieldBox("Hauteur", peekHEdit));
+        peekWEdit = input("Largeur %", percentText(MagicPrefs.peekW(this))); row2.addView(fieldBox("Largeur", peekWEdit));
+        peekHEdit = input("Hauteur %", percentText(MagicPrefs.peekH(this))); row2.addView(fieldBox("Hauteur", peekHEdit));
         peekCard.addView(row2);
         peekCard.addView(label("Inclinaison en degrés")); peekRotationEdit = input("0", trimFloat(MagicPrefs.peekRotation(this))); peekCard.addView(peekRotationEdit);
 
@@ -247,20 +247,20 @@ public class MainActivity extends Activity {
     private void syncPeekFineControlsFromPreview() {
         if (syncingPeekFineControls || peekPreview == null || peekXEdit == null) return;
         syncingPeekFineControls = true;
-        peekXEdit.setText(trimFloat(peekPreview.getBoxX()));
-        peekYEdit.setText(trimFloat(peekPreview.getBoxY()));
-        peekWEdit.setText(trimFloat(peekPreview.getBoxW()));
-        peekHEdit.setText(trimFloat(peekPreview.getBoxH()));
+        peekXEdit.setText(percentText(peekPreview.getBoxX()));
+        peekYEdit.setText(percentText(peekPreview.getBoxY()));
+        peekWEdit.setText(percentText(peekPreview.getBoxW()));
+        peekHEdit.setText(percentText(peekPreview.getBoxH()));
         peekRotationEdit.setText(trimFloat(peekPreview.getRotation()));
         syncingPeekFineControls = false;
     }
 
     private void applyPeekFineControlsToPreview() {
         if (syncingPeekFineControls || peekPreview == null || peekXEdit == null) return;
-        float x = clamp(parseFloat(peekXEdit.getText().toString(), peekPreview.getBoxX()), 0f, 100f);
-        float y = clamp(parseFloat(peekYEdit.getText().toString(), peekPreview.getBoxY()), 0f, 100f);
-        float w = clamp(parseFloat(peekWEdit.getText().toString(), peekPreview.getBoxW()), 5f, 100f);
-        float h = clamp(parseFloat(peekHEdit.getText().toString(), peekPreview.getBoxH()), 5f, 100f);
+        float x = clamp(parseFloat(peekXEdit.getText().toString(), peekPreview.getBoxX() * 100f) / 100f, 0f, 0.98f);
+        float y = clamp(parseFloat(peekYEdit.getText().toString(), peekPreview.getBoxY() * 100f) / 100f, 0f, 0.98f);
+        float w = clamp(parseFloat(peekWEdit.getText().toString(), peekPreview.getBoxW() * 100f) / 100f, 0.08f, 1f);
+        float h = clamp(parseFloat(peekHEdit.getText().toString(), peekPreview.getBoxH() * 100f) / 100f, 0.04f, 1f);
         float rotation = parseFloat(peekRotationEdit.getText().toString(), peekPreview.getRotation());
         peekPreview.setBox(x, y, w, h);
         peekPreview.setRotation(rotation);
@@ -361,6 +361,7 @@ public class MainActivity extends Activity {
     private float parseFloat(String value, float fallback) { try { return Float.parseFloat(value.trim().replace(",", ".")); } catch (Exception e) { return fallback; } }
     private float clamp(float value, float min, float max) { return Math.max(min, Math.min(max, value)); }
     private String trimFloat(float value) { return Math.abs(value - Math.round(value)) < 0.05f ? String.valueOf(Math.round(value)) : String.format(java.util.Locale.US, "%.1f", value); }
+    private String percentText(float fraction) { return trimFloat(fraction * 100f); }
     private int parseColor(String value, int fallback) { try { return Color.parseColor(value.trim()); } catch (Exception e) { return fallback; } }
     private String colorToHex(int color) { return String.format("#%06X", (0xFFFFFF & color)); }
     private String safeMessage(Exception e) { String msg = e.getMessage(); return msg == null || msg.isEmpty() ? e.getClass().getSimpleName() : msg; }
