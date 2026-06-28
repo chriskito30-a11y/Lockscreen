@@ -16,7 +16,7 @@ public class MagicTileService extends TileService {
                 String token = MagicPrefs.token(getApplicationContext());
 
                 if (!backend.isEmpty() && !token.isEmpty()) {
-                    MagicResult result = MagicWallpaperClient.updateLockscreen(
+                    MagicWallpaperClient.MagicResult result = MagicWallpaperClient.updateLockscreen(
                             getApplicationContext(),
                             backend,
                             token
