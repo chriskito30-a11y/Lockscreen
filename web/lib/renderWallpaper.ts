@@ -26,10 +26,7 @@ function wrapText(input: string, maxChars: number): string[] {
     }
   }
 
-  if (line) {
-    lines.push(line);
-  }
-
+  if (line) lines.push(line);
   return lines.slice(0, 4);
 }
 
@@ -40,38 +37,36 @@ export async function renderWallpaper(params: {
   image?: Buffer;
 }): Promise<Buffer> {
   const { config, revelation, wiki, image } = params;
-  const width = config.width;
-  const height = config.height;
+  const width = config.width || 1080;
+  const height = config.height || 2400;
   const safeRevelation = revelation.trim() || 'Révélation';
 
   let base: sharp.Sharp;
 
-  // Important : dès qu'une image est disponible, on l'utilise.
-  // Cela corrige les anciens tokens créés accidentellement en text-only.
-  if (image) {
+  // On utilise la photo dès qu'elle existe, même si un ancien token a été créé en text-only.
+  if (image && image.length > 500) {
     base = sharp(image)
       .resize(width, height, {
         fit: 'cover',
         position: 'center'
       })
       .modulate({
-        brightness: 0.76,
+        brightness: 0.72,
         saturation: 0.98
-      })
-      .blur(0.2);
+      });
   } else {
     const bgSvg = Buffer.from(`
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stop-color="#020617"/>
-            <stop offset="45%" stop-color="#0f172a"/>
-            <stop offset="100%" stop-color="#1e3a8a"/>
+            <stop offset="48%" stop-color="#0f172a"/>
+            <stop offset="100%" stop-color="#1d4ed8"/>
           </linearGradient>
         </defs>
         <rect width="100%" height="100%" fill="url(#bg)"/>
-        <circle cx="${Math.round(width * 0.2)}" cy="${Math.round(height * 0.18)}" r="${Math.round(width * 0.45)}" fill="#2563eb" opacity="0.22"/>
-        <circle cx="${Math.round(width * 0.86)}" cy="${Math.round(height * 0.78)}" r="${Math.round(width * 0.52)}" fill="#7c3aed" opacity="0.18"/>
+        <circle cx="${Math.round(width * 0.18)}" cy="${Math.round(height * 0.16)}" r="${Math.round(width * 0.45)}" fill="#2563eb" opacity="0.30"/>
+        <circle cx="${Math.round(width * 0.85)}" cy="${Math.round(height * 0.82)}" r="${Math.round(width * 0.55)}" fill="#7c3aed" opacity="0.22"/>
       </svg>
     `);
 
@@ -83,7 +78,7 @@ export async function renderWallpaper(params: {
     height,
     revelation: safeRevelation,
     wiki,
-    hasPhoto: Boolean(image)
+    hasPhoto: Boolean(image && image.length > 500)
   });
 
   return base
@@ -101,14 +96,17 @@ function buildOverlay(params: {
 }): Buffer {
   const { width, height, revelation, wiki, hasPhoto } = params;
 
-  const titleLines = wrapText(revelation, width > 1200 ? 20 : 16);
-  const fontSize = Math.max(58, Math.round(width * 0.088));
-  const smallSize = Math.max(22, Math.round(width * 0.027));
-  const boxY = Math.round(height * 0.60);
-  const boxH = Math.round(height * 0.28);
-  const pad = Math.round(width * 0.075);
-  const lineGap = Math.round(fontSize * 1.08);
-  const startY = boxY + Math.round(boxH * 0.30);
+  const titleLines = wrapText(revelation, width > 1200 ? 20 : 15);
+  const titleSize = Math.max(68, Math.round(width * 0.105));
+  const smallSize = Math.max(28, Math.round(width * 0.032));
+  const pad = Math.round(width * 0.07);
+
+  // Zone volontairement très visible au centre, pas en bas,
+  // pour éviter que Samsung/Android masque le texte avec l'horloge.
+  const boxY = Math.round(height * 0.36);
+  const boxH = Math.round(height * 0.30);
+  const startY = boxY + Math.round(boxH * 0.34);
+  const lineGap = Math.round(titleSize * 1.08);
 
   const tspans = titleLines
     .map((line, index) => {
@@ -118,21 +116,24 @@ function buildOverlay(params: {
     .join('');
 
   const sourceText = hasPhoto && wiki.title
-    ? `Source image : Wikipédia — ${wiki.title}`
+    ? `Photo Wikipédia — ${wiki.title}`
     : wiki.title
-      ? `Aucune photo récupérée — ${wiki.title}`
-      : 'Aucune photo récupérée';
+      ? `Photo non récupérée — ${wiki.title}`
+      : 'Photo non récupérée';
+
+  const photoBadge = hasPhoto ? 'PHOTO OK' : 'SANS PHOTO';
 
   const svg = `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#000000" stop-opacity="0.10"/>
-          <stop offset="46%" stop-color="#000000" stop-opacity="0.10"/>
-          <stop offset="100%" stop-color="#000000" stop-opacity="0.76"/>
+          <stop offset="0%" stop-color="#000000" stop-opacity="0.22"/>
+          <stop offset="45%" stop-color="#000000" stop-opacity="0.18"/>
+          <stop offset="100%" stop-color="#000000" stop-opacity="0.78"/>
         </linearGradient>
+
         <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.55"/>
+          <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000000" flood-opacity="0.65"/>
         </filter>
       </defs>
 
@@ -143,9 +144,9 @@ function buildOverlay(params: {
         y="${boxY}"
         width="${Math.round(width * 0.91)}"
         height="${boxH}"
-        rx="${Math.round(width * 0.055)}"
+        rx="${Math.round(width * 0.06)}"
         fill="#020617"
-        opacity="0.72"
+        opacity="0.78"
         filter="url(#shadow)"
       />
 
@@ -154,19 +155,38 @@ function buildOverlay(params: {
         y="${startY}"
         fill="#ffffff"
         font-family="Arial, Helvetica, sans-serif"
-        font-size="${fontSize}"
-        font-weight="800"
-        letter-spacing="-1"
+        font-size="${titleSize}"
+        font-weight="900"
+        letter-spacing="-2"
       >${tspans}</text>
 
       <text
         x="${pad}"
-        y="${boxY + boxH - Math.round(boxH * 0.16)}"
+        y="${boxY + boxH - Math.round(boxH * 0.13)}"
         fill="#cbd5e1"
         font-family="Arial, Helvetica, sans-serif"
         font-size="${smallSize}"
-        font-weight="500"
+        font-weight="600"
       >${xmlEscape(sourceText)}</text>
+
+      <rect
+        x="${pad}"
+        y="${Math.round(height * 0.08)}"
+        width="${Math.round(width * 0.32)}"
+        height="${Math.round(height * 0.045)}"
+        rx="${Math.round(width * 0.025)}"
+        fill="${hasPhoto ? '#16a34a' : '#dc2626'}"
+        opacity="0.92"
+      />
+
+      <text
+        x="${pad + Math.round(width * 0.035)}"
+        y="${Math.round(height * 0.111)}"
+        fill="#ffffff"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="${Math.round(width * 0.032)}"
+        font-weight="800"
+      >${photoBadge}</text>
     </svg>
   `;
 
